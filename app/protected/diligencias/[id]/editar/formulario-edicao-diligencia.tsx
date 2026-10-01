@@ -1118,7 +1118,7 @@ useEffect(() => {
 
         <div className="flex items-center justify-between gap-4 pb-10">
             <p className="text-sm text-muted-foreground">
-              Antes de salvar, o Pela Ordem verificará novamente a pauta e os participantes.
+              Antes de salvar, o NOTE LITIS verificará novamente a pauta e os participantes.
             </p>
 
             <button

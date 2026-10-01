@@ -59,7 +59,7 @@ export function Sidebar() {
       <div className="border-b border-white/10 px-7 py-8">
         <Link href="/protected">
           <h1 className="text-3xl font-bold tracking-tight">
-            Pela Ordem
+            NOTE LITIS
           </h1>
 
           <p className="mt-1 text-xs text-white/60">
@@ -103,7 +103,7 @@ export function Sidebar() {
       {/* Rodapé */}
       <div className="border-t border-white/10 px-7 py-5">
         <p className="text-xs text-white/45">
-          Pela Ordem
+          NOTE LITIS
         </p>
 
         <p className="mt-1 text-xs text-white/30">

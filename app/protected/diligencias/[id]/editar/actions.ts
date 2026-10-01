@@ -2983,7 +2983,7 @@ async function persistirEdicao(
   /*
     Garantia explícita dos campos novos.
 
-    Isso protege o Pela Ordem enquanto
+    Isso protege o NOTE LITIS enquanto
     a RPC ainda convive com campos legados.
   */
   await garantirCamposCanonicos(

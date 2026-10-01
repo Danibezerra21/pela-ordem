@@ -61,7 +61,7 @@ export default async function ProtectedPage() {
       <main className="flex min-h-[70vh] items-center justify-center">
         <div className="w-full max-w-lg rounded-xl border p-8">
           <h1 className="text-2xl font-semibold">
-            Pela Ordem
+            NOTE LITIS
           </h1>
 
           <p className="mt-4 text-muted-foreground">
@@ -132,7 +132,7 @@ export default async function ProtectedPage() {
     Por isso, estes números começam em zero.
 
     Depois eles serão substituídos por consultas reais
-    ao banco do Pela Ordem.
+    ao banco do NOTE LITIS.
   */
 
   const diligenciasHoje = 0;
@@ -302,7 +302,7 @@ export default async function ProtectedPage() {
 
             <p className="mt-1 max-w-md text-sm text-muted-foreground">
               Assim que as primeiras diligências forem cadastradas,
-              o Pela Ordem mostrará aqui o que precisa ser resolvido.
+              o NOTE LITIS mostrará aqui o que precisa ser resolvido.
             </p>
           </div>
         </div>
