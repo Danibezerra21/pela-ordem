@@ -1,30 +1,109 @@
-import { createClient } from "@/lib/supabase/server";
-import { type EmailOtpType } from "@supabase/supabase-js";
-import { redirect } from "next/navigation";
-import { type NextRequest } from "next/server";
+import type {
+  EmailOtpType,
+} from "@supabase/supabase-js";
 
-export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const token_hash = searchParams.get("token_hash");
-  const type = searchParams.get("type") as EmailOtpType | null;
-  const next = searchParams.get("next") ?? "/";
+import {
+  type NextRequest,
+  NextResponse,
+} from "next/server";
 
-  if (token_hash && type) {
-    const supabase = await createClient();
+import {
+  createClient,
+} from "@/lib/supabase/server";
 
-    const { error } = await supabase.auth.verifyOtp({
-      type,
-      token_hash,
-    });
+function destinoSeguro(
+  valor:
+    string | null
+) {
+  if (
+    !valor ||
+    !valor.startsWith(
+      "/"
+    ) ||
+    valor.startsWith(
+      "//"
+    )
+  ) {
+    return "/protected";
+  }
+
+  return valor;
+}
+
+export async function GET(
+  request:
+    NextRequest
+) {
+  const {
+    searchParams,
+  } =
+    new URL(
+      request.url
+    );
+
+  const tokenHash =
+    searchParams.get(
+      "token_hash"
+    );
+
+  const type =
+    searchParams.get(
+      "type"
+    ) as
+      | EmailOtpType
+      | null;
+
+  const next =
+    destinoSeguro(
+      searchParams.get(
+        "next"
+      )
+    );
+
+  const url =
+    request.nextUrl.clone();
+
+  url.search =
+    "";
+
+  if (
+    tokenHash &&
+    type
+  ) {
+    const supabase =
+      await createClient();
+
+    const {
+      error,
+    } =
+      await supabase
+        .auth
+        .verifyOtp({
+          type,
+
+          token_hash:
+            tokenHash,
+        });
+
     if (!error) {
-      // redirect user to specified redirect URL or root of app
-      redirect(next);
-    } else {
-      // redirect the user to an error page with some instructions
-      redirect(`/auth/error?error=${error?.message}`);
+      url.pathname =
+        next;
+
+      return NextResponse.redirect(
+        url
+      );
     }
   }
 
-  // redirect the user to an error page with some instructions
-  redirect(`/auth/error?error=No token hash or type`);
+  url.pathname =
+    "/auth/login";
+
+  url.searchParams.set(
+    "erro",
+    "convite_invalido"
+  );
+
+  return NextResponse.redirect(
+    url
+  );
 }

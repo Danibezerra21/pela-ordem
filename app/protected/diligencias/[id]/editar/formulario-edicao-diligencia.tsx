@@ -917,9 +917,7 @@ useEffect(() => {
                 required
                 defaultValue={
                   dataParaInput(
-                    state.valores
-                      ?.data_diligencia ??
-                      diligencia.data_diligencia
+                    diligencia.data_diligencia
                   )
                 }
                 className="mt-2 w-full rounded-lg border bg-background px-3 py-2.5 text-sm"

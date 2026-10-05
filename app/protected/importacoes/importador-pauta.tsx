@@ -28,8 +28,10 @@ import {
 import {
   analisarImportacaoNoBanco,
   importarPauta,
+  registrarEventoImportacao,
   type AlertaBancoImportacao,
   type ConfirmacaoBancoImportacao,
+  type EventoAuditoriaImportacao,
   type LinhaImportacaoEntrada,
 } from "./actions";
 
@@ -837,6 +839,41 @@ export function ImportadorPauta() {
     );
   }
 
+  async function auditarImportacao(
+  evento:
+    Omit<
+      EventoAuditoriaImportacao,
+      "arquivo"
+    >
+) {
+  const resultado =
+    await registrarEventoImportacao({
+      ...evento,
+
+      arquivo:
+        nomeArquivo,
+    });
+
+
+  if (
+    resultado.status ===
+    "erro"
+  ) {
+    setErroServidor(
+      resultado.mensagem
+    );
+
+    return false;
+  }
+
+
+  setErroServidor(
+    null
+  );
+
+  return true;
+}
+
   function limparArquivo() {
     setNomeArquivo("");
     setLinhas([]);
@@ -1507,183 +1544,415 @@ export function ImportadorPauta() {
     );
   }
 
-  function salvarEdicao() {
-    if (
-      linhaEmEdicao ===
-        null ||
-      !dadosEdicao
-    ) {
-      return;
-    }
+  async function salvarEdicao() {
+  if (
+    linhaEmEdicao ===
+      null ||
+    !dadosEdicao
+  ) {
+    return;
+  }
 
-    const uf =
-      normalizarUfImportacao(
-        dadosEdicao.uf
-      );
 
-    const novosDados = {
-      ...dadosEdicao,
-
-      modalidade:
-        dadosEdicao
-          .modalidade
-          .trim()
-          .toUpperCase(),
-
-      uf:
-        uf ??
-        dadosEdicao
-          .uf
-          .trim()
-          .toUpperCase(),
-    };
-
-    setLinhas(
-      (anteriores) =>
-        anteriores.map(
-          (linha) =>
-            linha.linhaExcel ===
-            linhaEmEdicao
-              ? {
-                  ...linha,
-
-                  dados:
-                    novosDados,
-                }
-              : linha
-        )
+  const linhaAnterior =
+    linhas.find(
+      (linha) =>
+        linha.linhaExcel ===
+        linhaEmEdicao
     );
 
-    setAlertasArquivoConfirmados(
-      (anteriores) => {
-        const novo =
-          new Set(
-            anteriores
-          );
 
-        novo.delete(
+  if (!linhaAnterior) {
+    setErroServidor(
+      "Não foi possível identificar a linha que está sendo corrigida."
+    );
+
+    return;
+  }
+
+
+  const uf =
+    normalizarUfImportacao(
+      dadosEdicao.uf
+    );
+
+
+  const novosDados = {
+    ...dadosEdicao,
+
+    modalidade:
+      dadosEdicao
+        .modalidade
+        .trim()
+        .toUpperCase(),
+
+    uf:
+      uf ??
+      dadosEdicao
+        .uf
+        .trim()
+        .toUpperCase(),
+  };
+
+
+  const auditada =
+    await auditarImportacao({
+      acao:
+        "IMPORTACAO_LINHA_CORRIGIDA",
+
+      linhaExcel:
+        linhaEmEdicao,
+
+      dadosAnteriores:
+        {
+          ...linhaAnterior
+            .dados,
+        },
+
+      dadosNovos:
+        {
+          ...novosDados,
+        },
+
+      contexto: {
+        decisao:
+          "CORRIGIR",
+
+        alerta_arquivo_confirmado_antes:
+          alertasArquivoConfirmados.has(
+            linhaEmEdicao
+          ),
+      },
+    });
+
+
+  if (!auditada) {
+    return;
+  }
+
+
+  setLinhas(
+    (anteriores) =>
+      anteriores.map(
+        (linha) =>
+          linha.linhaExcel ===
           linhaEmEdicao
+            ? {
+                ...linha,
+
+                dados:
+                  novosDados,
+              }
+            : linha
+      )
+  );
+
+
+  setAlertasArquivoConfirmados(
+    (anteriores) => {
+      const novo =
+        new Set(
+          anteriores
         );
 
-        return novo;
-      }
-    );
+      novo.delete(
+        linhaEmEdicao
+      );
 
-    invalidarAnaliseBanco();
+      return novo;
+    }
+  );
 
-    fecharEdicao();
 
-    setPagina(1);
-  }
+  invalidarAnaliseBanco();
+
+  fecharEdicao();
+
+  setPagina(1);
+}
 
   /* ===================================================
      DESCARTE
   =================================================== */
 
-  function descartarLinha(
-    linhaExcel:
-      number
-  ) {
-    setDescartadas(
-      (anteriores) => {
-        const novo =
-          new Set(
-            anteriores
-          );
-
-        novo.add(
-          linhaExcel
-        );
-
-        return novo;
-      }
+  async function descartarLinha(
+  linhaExcel:
+    number
+) {
+  const linha =
+    linhasParaTabela.find(
+      (item) =>
+        item.linhaExcel ===
+        linhaExcel
     );
 
-    setAlertasArquivoConfirmados(
-      (anteriores) => {
-        const novo =
-          new Set(
-            anteriores
-          );
 
-        novo.delete(
-          linhaExcel
-        );
-
-        return novo;
-      }
-    );
-
-    invalidarAnaliseBanco();
+  if (!linha) {
+    return;
   }
 
-  function restaurarLinha(
-    linhaExcel:
-      number
-  ) {
-    setDescartadas(
-      (anteriores) => {
-        const novo =
-          new Set(
-            anteriores
-          );
 
-        novo.delete(
-          linhaExcel
+  const auditada =
+    await auditarImportacao({
+      acao:
+        "IMPORTACAO_LINHA_DESCARTADA",
+
+      linhaExcel,
+
+      dadosAnteriores: {
+        ...linha.dados,
+      },
+
+      dadosNovos:
+        null,
+
+      contexto: {
+        decisao:
+          "DESCARTAR",
+
+        situacao:
+          linha.situacao,
+
+        erros:
+          linha.erros,
+
+        alertas:
+          linha.alertas,
+
+        alerta_arquivo_confirmado_antes:
+          alertasArquivoConfirmados.has(
+            linhaExcel
+          ),
+      },
+    });
+
+
+  if (!auditada) {
+    return;
+  }
+
+
+  setDescartadas(
+    (anteriores) => {
+      const novo =
+        new Set(
+          anteriores
         );
 
-        return novo;
-      }
+      novo.add(
+        linhaExcel
+      );
+
+      return novo;
+    }
+  );
+
+
+  setAlertasArquivoConfirmados(
+    (anteriores) => {
+      const novo =
+        new Set(
+          anteriores
+        );
+
+      novo.delete(
+        linhaExcel
+      );
+
+      return novo;
+    }
+  );
+
+
+  invalidarAnaliseBanco();
+}
+
+  async function restaurarLinha(
+  linhaExcel:
+    number
+) {
+  const linha =
+    linhasParaTabela.find(
+      (item) =>
+        item.linhaExcel ===
+        linhaExcel
     );
 
-    invalidarAnaliseBanco();
+
+  if (!linha) {
+    return;
   }
+
+
+  const auditada =
+    await auditarImportacao({
+      acao:
+        "IMPORTACAO_LINHA_RESTAURADA",
+
+      linhaExcel,
+
+      dadosAnteriores:
+        null,
+
+      dadosNovos: {
+        ...linha.dados,
+      },
+
+      contexto: {
+        decisao:
+          "RESTAURAR",
+      },
+    });
+
+
+  if (!auditada) {
+    return;
+  }
+
+
+  setDescartadas(
+    (anteriores) => {
+      const novo =
+        new Set(
+          anteriores
+        );
+
+      novo.delete(
+        linhaExcel
+      );
+
+      return novo;
+    }
+  );
+
+
+  invalidarAnaliseBanco();
+}
 
   /* ===================================================
      CONFIRMAÇÃO DE ALERTA DO EXCEL
   =================================================== */
 
-  function confirmarAlertaArquivo(
-    linhaExcel:
-      number
-  ) {
-    setAlertasArquivoConfirmados(
-      (anteriores) => {
-        const novo =
-          new Set(
-            anteriores
-          );
-
-        novo.add(
-          linhaExcel
-        );
-
-        return novo;
-      }
-    );
-  }
-
-  function retirarConfirmacaoAlertaArquivo(
-    linhaExcel:
-      number
-  ) {
-    setAlertasArquivoConfirmados(
-      (anteriores) => {
-        const novo =
-          new Set(
-            anteriores
-          );
-
-        novo.delete(
-          linhaExcel
-        );
-
-        return novo;
-      }
+  async function confirmarAlertaArquivo(
+  linhaExcel:
+    number
+) {
+  const linha =
+    linhasAnalisadasAtivas.find(
+      (item) =>
+        item.linhaExcel ===
+        linhaExcel
     );
 
-    invalidarAnaliseBanco();
+
+  if (!linha) {
+    return;
   }
+
+
+  const auditada =
+    await auditarImportacao({
+      acao:
+        "IMPORTACAO_ALERTA_ARQUIVO_CONFIRMADO",
+
+      linhaExcel,
+
+      dadosAnteriores: {
+        ...linha.dados,
+      },
+
+      contexto: {
+        decisao:
+          "IMPORTAR_MESMO_ASSIM",
+
+        alertas_apresentados:
+          linha.alertas,
+      },
+    });
+
+
+  if (!auditada) {
+    return;
+  }
+
+
+  setAlertasArquivoConfirmados(
+    (anteriores) => {
+      const novo =
+        new Set(
+          anteriores
+        );
+
+      novo.add(
+        linhaExcel
+      );
+
+      return novo;
+    }
+  );
+}
+
+  async function retirarConfirmacaoAlertaArquivo(
+  linhaExcel:
+    number
+) {
+  const linha =
+    linhasAnalisadasAtivas.find(
+      (item) =>
+        item.linhaExcel ===
+        linhaExcel
+    );
+
+
+  if (!linha) {
+    return;
+  }
+
+
+  const auditada =
+    await auditarImportacao({
+      acao:
+        "IMPORTACAO_ALERTA_ARQUIVO_DESCONFIRMADO",
+
+      linhaExcel,
+
+      dadosAnteriores: {
+        ...linha.dados,
+      },
+
+      contexto: {
+        decisao:
+          "RETIRAR_CONFIRMACAO",
+
+        alertas_apresentados:
+          linha.alertas,
+      },
+    });
+
+
+  if (!auditada) {
+    return;
+  }
+
+
+  setAlertasArquivoConfirmados(
+    (anteriores) => {
+      const novo =
+        new Set(
+          anteriores
+        );
+
+      novo.delete(
+        linhaExcel
+      );
+
+      return novo;
+    }
+  );
+
+
+  invalidarAnaliseBanco();
+}
 
   /* ===================================================
      PAYLOAD
@@ -1797,21 +2066,90 @@ export function ImportadorPauta() {
      DECISÕES DO BANCO
   =================================================== */
 
-  function decidirAlertaBanco(
-    linhaExcel:
-      number,
-    decisao:
-      DecisaoBanco
-  ) {
-    setDecisoesBanco(
-      (anterior) => ({
-        ...anterior,
+  async function decidirAlertaBanco(
+  linhaExcel:
+    number,
 
-        [linhaExcel]:
-          decisao,
-      })
+  decisao:
+    DecisaoBanco
+) {
+  const alerta =
+    alertasBanco.find(
+      (item) =>
+        item.linhaExcel ===
+        linhaExcel
     );
+
+
+  const linha =
+    linhasAnalisadasAtivas.find(
+      (item) =>
+        item.linhaExcel ===
+        linhaExcel
+    );
+
+
+  if (
+    !alerta ||
+    !linha
+  ) {
+    return;
   }
+
+
+  const acao =
+    decisao ===
+    "importar"
+      ? "IMPORTACAO_ALERTA_BANCO_IMPORTAR_CONFIRMADO"
+      : "IMPORTACAO_ALERTA_BANCO_DESCARTADO";
+
+
+  const auditada =
+    await auditarImportacao({
+      acao,
+
+      linhaExcel,
+
+      dadosAnteriores: {
+        ...linha.dados,
+      },
+
+      contexto: {
+        decisao:
+          decisao ===
+          "importar"
+            ? "IMPORTAR_MESMO_ASSIM"
+            : "DESCARTAR",
+
+        decisao_anterior:
+          decisoesBanco[
+            linhaExcel
+          ] ??
+          null,
+
+        processo:
+          alerta.numeroProcesso,
+
+        diligencias_apresentadas:
+          alerta.diligencias,
+      },
+    });
+
+
+  if (!auditada) {
+    return;
+  }
+
+
+  setDecisoesBanco(
+    (anterior) => ({
+      ...anterior,
+
+      [linhaExcel]:
+        decisao,
+    })
+  );
+}
 
   const todosAlertasBancoDecididos =
     alertasBanco.every(
@@ -2783,6 +3121,29 @@ export function ImportadorPauta() {
                           >
                             Importar mesmo assim
                           </button>
+
+                          <button
+                              type="button"
+                              onClick={() => {
+                                const linha =
+                                  linhasAnalisadasAtivas.find(
+                                    (item) =>
+                                      item.linhaExcel ===
+                                      alerta.linhaExcel
+                                  );
+
+                                if (linha) {
+                                  abrirEdicao(
+                                    linha
+                                  );
+                                }
+                              }}
+                              className="inline-flex items-center gap-2 rounded-lg border bg-white px-4 py-2 text-sm font-medium hover:bg-amber-100/50"
+                            >
+                              <Pencil className="h-4 w-4" />
+
+                              Corrigir esta linha
+                            </button>
 
                           <button
                             type="button"

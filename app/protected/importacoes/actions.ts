@@ -91,6 +91,53 @@ export type ConfirmacaoBancoImportacao = {
     string[];
 };
 
+export type AcaoAuditoriaImportacao =
+  | "IMPORTACAO_LINHA_CORRIGIDA"
+  | "IMPORTACAO_LINHA_DESCARTADA"
+  | "IMPORTACAO_LINHA_RESTAURADA"
+  | "IMPORTACAO_ALERTA_ARQUIVO_CONFIRMADO"
+  | "IMPORTACAO_ALERTA_ARQUIVO_DESCONFIRMADO"
+  | "IMPORTACAO_ALERTA_BANCO_IMPORTAR_CONFIRMADO"
+  | "IMPORTACAO_ALERTA_BANCO_DESCARTADO"
+  | "IMPORTACAO_LOTE_CONCLUIDO";
+
+
+export type EventoAuditoriaImportacao = {
+
+  acao:
+    AcaoAuditoriaImportacao;
+
+  arquivo:
+    string;
+
+  linhaExcel?:
+    number | null;
+
+  dadosAnteriores?:
+    Record<string, unknown> | null;
+
+  dadosNovos?:
+    Record<string, unknown> | null;
+
+  contexto?:
+    Record<string, unknown>;
+
+};
+
+
+export type ResultadoAuditoriaImportacao =
+  | {
+      status:
+        "sucesso";
+    }
+  | {
+      status:
+        "erro";
+
+      mensagem:
+        string;
+    };
+
 export type ResultadoAnaliseImportacao =
   | {
       status: "pronta";
@@ -199,8 +246,28 @@ function normalizarTexto(
 ) {
   return valor
     .trim()
-    .replace(/\s+/g, " ")
+    .replace(
+      /\s+/g,
+      " "
+    )
     .toUpperCase();
+}
+
+/*
+  Campos de conteúdo livre não devem ser
+  convertidos para maiúsculas.
+
+  LOCAL pode conter endereço, mas também
+  pode conter URL de audiência virtual.
+
+  OBSERVAÇÕES pode conter links, códigos,
+  referências e textos cuja capitalização
+  deve ser preservada.
+*/
+function normalizarTextoLivre(
+  valor: string
+) {
+  return valor.trim();
 }
 
 function converterDataParaBanco(
@@ -283,8 +350,131 @@ async function obterEmpresaUsuario() {
   return {
     supabase,
     usuarioId,
+
     empresaId:
       membro.empresa_id,
+  };
+}
+
+/* =====================================================
+   AUDITORIA DA IMPORTAÇÃO
+
+   Registra decisões tomadas na prévia da pauta
+   antes da efetiva criação das diligências.
+
+   O banco continua sendo a autoridade final:
+   - identifica o usuário por auth.uid()
+   - identifica a empresa
+   - valida a permissão operacional
+   - limita as ações aceitas
+===================================================== */
+
+export async function registrarEventoImportacao(
+  evento:
+    EventoAuditoriaImportacao
+): Promise<
+  ResultadoAuditoriaImportacao
+> {
+
+  const {
+    supabase,
+    empresaId,
+  } =
+    await obterEmpresaUsuario();
+
+
+  const arquivoSeguro =
+    evento
+      .arquivo
+      .trim()
+      .slice(
+        0,
+        255
+      );
+
+
+  if (!arquivoSeguro) {
+    return {
+      status:
+        "erro",
+
+      mensagem:
+        "Não foi possível registrar a auditoria porque o arquivo da importação não foi identificado.",
+    };
+  }
+
+
+  if (
+    evento.linhaExcel !==
+      undefined &&
+    evento.linhaExcel !==
+      null &&
+    (
+      !Number.isInteger(
+        evento.linhaExcel
+      ) ||
+      evento.linhaExcel <
+        1
+    )
+  ) {
+    return {
+      status:
+        "erro",
+
+      mensagem:
+        "Não foi possível registrar a auditoria porque a linha do Excel é inválida.",
+    };
+  }
+
+
+  const {
+    error,
+  } =
+    await supabase.rpc(
+      "registrar_evento_importacao",
+      {
+        p_empresa_id:
+          empresaId,
+
+        p_acao:
+          evento.acao,
+
+        p_arquivo:
+          arquivoSeguro,
+
+        p_linha_excel:
+          evento.linhaExcel ??
+          null,
+
+        p_dados_anteriores:
+          evento.dadosAnteriores ??
+          null,
+
+        p_dados_novos:
+          evento.dadosNovos ??
+          null,
+
+        p_contexto:
+          evento.contexto ??
+          {},
+      }
+    );
+
+
+  if (error) {
+    return {
+      status:
+        "erro",
+
+      mensagem:
+        `Não foi possível registrar a auditoria da importação: ${error.message}`,
+    };
+  }
+
+
+  return {
+    status:
+      "sucesso",
   };
 }
 
@@ -474,12 +664,12 @@ function normalizarLinha(
           uf!,
 
         local:
-          normalizarTexto(
+          normalizarTextoLivre(
             linha.dados.local
           ),
 
         observacoes:
-          normalizarTexto(
+          normalizarTextoLivre(
             linha.dados
               .observacoes
           ),
@@ -491,8 +681,11 @@ function normalizarLinha(
 /* =====================================================
    VALIDAÇÃO DO LOTE
 
-   O servidor não confia na análise realizada
-   anteriormente no navegador.
+   A análise feita no navegador serve para
+   experiência do usuário.
+
+   O servidor revalida todo o conteúdo antes
+   de qualquer persistência.
 ===================================================== */
 
 function validarLote(
@@ -562,12 +755,9 @@ function validarLote(
   }
 
   /*
-    ============================================
-    ALERTAS INTERNOS DO ARQUIVO
-
-    Mesmo processo repetido continua sendo
-    permitido, mas exige confirmação.
-    ============================================
+    Mesmo processo no próprio Excel pode ser
+    legítimo, mas precisa ter sido apresentado
+    e confirmado pelo usuário.
   */
 
   const porProcesso =
@@ -629,9 +819,11 @@ function validarLote(
 /* =====================================================
    CONSULTA DE DILIGÊNCIAS ATIVAS
 
-   IMPORTANTE:
-   concluídas e canceladas NÃO participam
-   do alerta.
+   Somente status = ativa participa do
+   alerta preventivo.
+
+   Concluídas e canceladas são histórico e
+   não devem gerar falso alerta.
 ===================================================== */
 
 async function consultarDiligenciasAtivas(
@@ -655,10 +847,6 @@ async function consultarDiligenciasAtivas(
     return [];
   }
 
-  /*
-    Evita gerar uma consulta gigantesca
-    quando o Excel possui muitas linhas.
-  */
   const blocos:
     string[][] = [];
 
@@ -816,8 +1004,9 @@ function montarAlertasBanco(
 /* =====================================================
    COMPARAÇÃO DE CONFIRMAÇÕES
 
-   Se a pauta mudar depois da análise,
-   obrigamos o usuário a analisar novamente.
+   Se a situação do banco mudar durante a
+   análise do usuário, a importação volta
+   para conferência.
 ===================================================== */
 
 function idsIguais(
@@ -883,6 +1072,7 @@ export async function analisarImportacaoNoBanco(
     await consultarDiligenciasAtivas(
       supabase,
       empresaId,
+
       linhasNormalizadas.map(
         (linha) =>
           linha.dados
@@ -925,8 +1115,10 @@ export async function analisarImportacaoNoBanco(
 
 export async function importarPauta(
   arquivo: string,
+
   linhas:
     LinhaImportacaoEntrada[],
+
   confirmacoesBanco:
     ConfirmacaoBancoImportacao[]
 ): Promise<
@@ -943,6 +1135,7 @@ export async function importarPauta(
     Revalidação integral imediatamente antes
     da gravação.
   */
+
   const {
     erros,
     linhasNormalizadas,
@@ -966,12 +1159,14 @@ export async function importarPauta(
 
   /*
     Reconsulta o banco imediatamente antes
-    de salvar.
+    de efetivar o lote.
   */
+
   const diligenciasAtivas =
     await consultarDiligenciasAtivas(
       supabase,
       empresaId,
+
       linhasNormalizadas.map(
         (linha) =>
           linha.dados
@@ -1015,6 +1210,7 @@ export async function importarPauta(
 
         return !idsIguais(
           confirmados,
+
           alerta.diligencias.map(
             (diligencia) =>
               diligencia.id
@@ -1024,10 +1220,11 @@ export async function importarPauta(
     );
 
   /*
-    Se alguma diligência ativa apareceu,
-    desapareceu ou mudou desde a conferência,
-    mostramos novamente.
+    Surgiu, desapareceu ou mudou uma
+    diligência ativa enquanto o usuário
+    conferia a pauta.
   */
+
   if (
     alertasNaoConfirmados.length >
     0
@@ -1115,6 +1312,9 @@ export async function importarPauta(
           uf:
             linha.dados.uf,
 
+          /*
+            Preservados conforme informados.
+          */
           local:
             linha.dados.local,
 
@@ -1157,6 +1357,9 @@ export async function importarPauta(
           orientacoes_encaminhadas:
             false,
 
+          /*
+            Preservadas conforme informadas.
+          */
           observacoes:
             linha.dados
               .observacoes,
@@ -1212,16 +1415,17 @@ export async function importarPauta(
 
   const {
     error,
-  } = await supabase.rpc(
-    "importar_diligencias_lote",
-    {
-      p_empresa_id:
-        empresaId,
+  } =
+    await supabase.rpc(
+      "importar_diligencias_lote",
+      {
+        p_empresa_id:
+          empresaId,
 
-      p_diligencias:
-        lote,
-    }
-  );
+        p_diligencias:
+          lote,
+      }
+    );
 
   if (error) {
     return {

@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+
 import {
   Pencil,
   Power,
@@ -22,6 +23,8 @@ import {
 import {
   alternarStatusCorrespondente,
 } from "./actions";
+
+export const instant = false;
 
 /* =====================================================
    TIPOS

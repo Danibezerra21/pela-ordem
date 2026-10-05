@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
 
 import {
   AlertTriangle,
@@ -16,17 +18,7 @@ import {
   UsersRound,
 } from "lucide-react";
 
-import {
-  redirect,
-} from "next/navigation";
-
-import {
-  createClient,
-} from "@/lib/supabase/server";
-
-import {
-  ModalDesfecho,
-} from "./modal-desfecho";
+import { ModalDesfecho } from "./modal-desfecho";
 
 /* =====================================================
    TIPOS
@@ -49,90 +41,39 @@ type TestemunhasStatus =
   | null;
 
 type DiligenciaBase = {
-  id:
-    string;
-
-  empresa_id:
-    string;
-
-  tipo_diligencia:
-    string;
-
-  modalidade:
-    string | null;
-
-  numero_processo:
-    string | null;
-
-  parte_autora:
-    string | null;
-
-  parte_re:
-    string | null;
-
-  data_diligencia:
-    string;
-
-  horario:
-    string;
-
-  vara:
-    string | null;
-
-  comarca:
-    string | null;
-
-  uf:
-    string | null;
-
-  local:
-    string | null;
-
-  correspondente_id:
-    string | null;
-
-  necessita_preposto:
-    boolean | null;
-
-  preposto_id:
-    string | null;
-
-  testemunhas_status:
-    string | null;
-
-  testemunhas_confirmadas:
-    boolean | null;
-
-  contratacao_status:
-    string | null;
-
-  contratacao_tipo:
-    string | null;
-
-  contratacao_confirmada:
-    boolean | null;
-
-  orientacoes_encaminhadas:
-    boolean | null;
-
-  status:
-    string;
-
-  excluida_em:
-    string | null;
+  id: string;
+  empresa_id: string;
+  tipo_diligencia: string;
+  modalidade: string | null;
+  numero_processo: string | null;
+  parte_autora: string | null;
+  parte_re: string | null;
+  data_diligencia: string;
+  horario: string;
+  vara: string | null;
+  comarca: string | null;
+  uf: string | null;
+  local: string | null;
+  correspondente_id: string | null;
+  necessita_preposto: boolean | null;
+  preposto_id: string | null;
+  testemunhas_status: string | null;
+  testemunhas_confirmadas: boolean | null;
+  contratacao_status: string | null;
+  contratacao_tipo: string | null;
+  contratacao_confirmada: boolean | null;
+  orientacoes_encaminhadas: boolean | null;
+  status: string;
+  excluida_em: string | null;
 };
 
 type VinculoTestemunha = {
-  diligencia_id:
-    string;
-
-  testemunha_id:
-    string;
+  diligencia_id: string;
+  testemunha_id: string;
 };
 
 type VinculoFinanceiro = {
-  diligencia_id:
-    string;
+  diligencia_id: string;
 };
 
 type Urgencia =
@@ -145,38 +86,67 @@ type Urgencia =
 
 type PendenciaCalculada =
   DiligenciaBase & {
-    pendencias:
-      string[];
-
-    diasAte:
-      number | null;
-
-    urgencia:
-      Urgencia;
-
-    testemunhasVinculadas:
-      number;
-
-    temContratacaoFinanceira:
-      boolean;
-
-    desfechoPendente:
-      boolean;
-
-    monitoramentoProximo:
-      boolean;
+    pendencias: string[];
+    diasAte: number | null;
+    urgencia: Urgencia;
+    testemunhasVinculadas: number;
+    temContratacaoFinanceira: boolean;
+    desfechoPendente: boolean;
+    monitoramentoProximo: boolean;
   };
 
 type AgoraLocal = {
-  data:
-    string;
+  data: string;
+  horario: string;
+};
 
-  horario:
-    string;
+type FiltroPendencias =
+  | "fila_operacional"
+  | "atos_hoje_anteriores"
+  | "proximos_3_dias"
+  | "de_4_a_15_dias";
+
+type SearchParamsPendencias = {
+  filtro?: string | string[];
 };
 
 /* =====================================================
-   CONSTANTES OPERACIONAIS
+   FILTROS
+===================================================== */
+
+const NOMES_FILTROS: Record<
+  FiltroPendencias,
+  string
+> = {
+  fila_operacional:
+    "Na fila operacional",
+
+  atos_hoje_anteriores:
+    "Atos de hoje e anteriores",
+
+  proximos_3_dias:
+    "Próximos 3 dias",
+
+  de_4_a_15_dias:
+    "De 4 a 15 dias",
+};
+
+function ehFiltroPendencias(
+  valor:
+    | string
+    | null
+    | undefined
+): valor is FiltroPendencias {
+  return (
+    valor === "fila_operacional" ||
+    valor === "atos_hoje_anteriores" ||
+    valor === "proximos_3_dias" ||
+    valor === "de_4_a_15_dias"
+  );
+}
+
+/* =====================================================
+   CONSTANTES
 ===================================================== */
 
 const TEXTO_MONITORAMENTO =
@@ -186,7 +156,7 @@ const TEXTO_DESFECHO =
   "Registrar o desfecho da diligência.";
 
 /* =====================================================
-   DATA/HORA LOCAL
+   DATA E HORA
 ===================================================== */
 
 function agoraEmRecife(): AgoraLocal {
@@ -219,84 +189,45 @@ function agoraEmRecife(): AgoraLocal {
       new Date()
     );
 
-  const obter =
-    (
-      tipo:
-        Intl.DateTimeFormatPartTypes
-    ) =>
-      partes.find(
-        (parte) =>
-          parte.type ===
-          tipo
-      )?.value ??
-      "";
-
-  const ano =
-    obter(
-      "year"
-    );
-
-  const mes =
-    obter(
-      "month"
-    );
-
-  const dia =
-    obter(
-      "day"
-    );
-
-  const hora =
-    obter(
-      "hour"
-    );
-
-  const minuto =
-    obter(
-      "minute"
-    );
+  const obter = (
+    tipo:
+      Intl.DateTimeFormatPartTypes
+  ) =>
+    partes.find(
+      (parte) =>
+        parte.type === tipo
+    )?.value ?? "";
 
   return {
     data:
-      `${ano}-${mes}-${dia}`,
+      `${obter("year")}-${obter("month")}-${obter("day")}`,
 
     horario:
-      `${hora}:${minuto}`,
+      `${obter("hour")}:${obter("minute")}`,
   };
 }
 
 function diasEntreDatas(
-  inicio:
-    string,
-
-  fim:
-    string
+  inicio: string,
+  fim: string
 ) {
   const [
     anoInicio,
     mesInicio,
     diaInicio,
-  ] =
-    inicio
-      .slice(
-        0,
-        10
-      )
-      .split("-")
-      .map(Number);
+  ] = inicio
+    .slice(0, 10)
+    .split("-")
+    .map(Number);
 
   const [
     anoFim,
     mesFim,
     diaFim,
-  ] =
-    fim
-      .slice(
-        0,
-        10
-      )
-      .split("-")
-      .map(Number);
+  ] = fim
+    .slice(0, 10)
+    .split("-")
+    .map(Number);
 
   if (
     !anoInicio ||
@@ -324,10 +255,7 @@ function diasEntreDatas(
     );
 
   return Math.round(
-    (
-      dataFim -
-      dataInicio
-    ) /
+    (dataFim - dataInicio) /
       86_400_000
   );
 }
@@ -335,48 +263,39 @@ function diasEntreDatas(
 function atoJaTranscorreu(
   diligencia:
     DiligenciaBase,
-
   agora:
     AgoraLocal
 ) {
   const data =
-    diligencia
-      .data_diligencia
-      .slice(
-        0,
-        10
-      );
+    diligencia.data_diligencia.slice(
+      0,
+      10
+    );
 
   if (
-    data <
-    agora.data
+    data < agora.data
   ) {
     return true;
   }
 
   if (
-    data >
-    agora.data
+    data > agora.data
   ) {
     return false;
   }
 
   const horario =
-    diligencia
-      .horario
-      ?.slice(
-        0,
-        5
-      ) ??
-    "";
+    diligencia.horario?.slice(
+      0,
+      5
+    ) ?? "";
 
   if (!horario) {
     return false;
   }
 
   return (
-    horario <=
-    agora.horario
+    horario <= agora.horario
   );
 }
 
@@ -385,20 +304,15 @@ function atoJaTranscorreu(
 ===================================================== */
 
 function formatarData(
-  data:
-    string
+  data: string
 ) {
   const [
     ano,
     mes,
     dia,
-  ] =
-    data
-      .slice(
-        0,
-        10
-      )
-      .split("-");
+  ] = data
+    .slice(0, 10)
+    .split("-");
 
   if (
     !ano ||
@@ -467,7 +381,7 @@ function obterContratacaoStatus(
   if (
     diligencia
       .contratacao_status ===
-      "confirmada"
+    "confirmada"
   ) {
     return "confirmada";
   }
@@ -475,7 +389,7 @@ function obterContratacaoStatus(
   if (
     diligencia
       .contratacao_status ===
-      "desnecessaria"
+    "desnecessaria"
   ) {
     return "desnecessaria";
   }
@@ -483,7 +397,7 @@ function obterContratacaoStatus(
   if (
     diligencia
       .contratacao_confirmada ===
-      true
+    true
   ) {
     return "confirmada";
   }
@@ -500,10 +414,8 @@ function obterContratacaoTipo(
       .contratacao_tipo;
 
   if (
-    tipo ===
-      "advogado" ||
-    tipo ===
-      "preposto" ||
+    tipo === "advogado" ||
+    tipo === "preposto" ||
     tipo ===
       "advogado_preposto"
   ) {
@@ -540,7 +452,7 @@ function obterTestemunhasStatus(
   if (
     diligencia
       .testemunhas_confirmadas ===
-      true
+    true
   ) {
     return "confirmadas";
   }
@@ -553,8 +465,7 @@ function tipoIncluiAdvogado(
     ContratacaoTipo
 ) {
   return (
-    tipo ===
-      "advogado" ||
+    tipo === "advogado" ||
     tipo ===
       "advogado_preposto"
   );
@@ -565,8 +476,7 @@ function tipoIncluiPreposto(
     ContratacaoTipo
 ) {
   return (
-    tipo ===
-      "preposto" ||
+    tipo === "preposto" ||
     tipo ===
       "advogado_preposto"
   );
@@ -579,10 +489,8 @@ function tipoIncluiPreposto(
 function calcularPendencias(
   diligencia:
     DiligenciaBase,
-
   quantidadeTestemunhas:
     number,
-
   agora:
     AgoraLocal
 ) {
@@ -681,7 +589,7 @@ function calcularPendencias(
   if (
     diligencia
       .necessita_preposto ===
-      null
+    null
   ) {
     pendencias.push(
       "Definir se o ato necessita de preposto."
@@ -723,7 +631,7 @@ function calcularPendencias(
   if (
     diligencia
       .orientacoes_encaminhadas !==
-      true
+    true
   ) {
     pendencias.push(
       "Orientações ainda não encaminhadas."
@@ -855,8 +763,7 @@ function pesoUrgencia(
   }
 
   if (
-    urgencia ===
-    "hoje"
+    urgencia === "hoje"
   ) {
     return 1;
   }
@@ -869,8 +776,7 @@ function pesoUrgencia(
   }
 
   if (
-    urgencia ===
-    "alta"
+    urgencia === "alta"
   ) {
     return 3;
   }
@@ -888,7 +794,6 @@ function pesoUrgencia(
 function textoUrgencia(
   diasAte:
     number | null,
-
   urgencia:
     Urgencia
 ) {
@@ -913,8 +818,7 @@ function textoUrgencia(
   }
 
   if (
-    urgencia ===
-    "hoje"
+    urgencia === "hoje"
   ) {
     return "Hoje";
   }
@@ -935,8 +839,7 @@ function classeUrgencia(
   if (
     urgencia ===
       "atrasada" ||
-    urgencia ===
-      "hoje"
+    urgencia === "hoje"
   ) {
     return {
       badge:
@@ -961,10 +864,8 @@ function classeUrgencia(
   }
 
   if (
-    urgencia ===
-      "alta" ||
-    urgencia ===
-      "proxima"
+    urgencia === "alta" ||
+    urgencia === "proxima"
   ) {
     return {
       badge:
@@ -993,26 +894,27 @@ function ResumoCard({
   valor,
   descricao,
   destaque = false,
+  href,
+  ativo = false,
 }: {
-  titulo:
-    string;
-
-  valor:
-    number;
-
-  descricao:
-    string;
-
-  destaque?:
-    boolean;
+  titulo: string;
+  valor: number;
+  descricao: string;
+  destaque?: boolean;
+  href: string;
+  ativo?: boolean;
 }) {
+  const classeVisual =
+    ativo
+      ? "border-[#0b1f3a] bg-slate-50 ring-1 ring-[#0b1f3a]/15"
+      : destaque
+        ? "border-amber-200 bg-amber-50 hover:bg-amber-100/70"
+        : "bg-card hover:bg-muted/40";
+
   return (
-    <div
-      className={
-        destaque
-          ? "rounded-xl border border-amber-200 bg-amber-50 p-5"
-          : "rounded-xl border bg-card p-5"
-      }
+    <Link
+      href={href}
+      className={`group block cursor-pointer rounded-xl border p-5 transition-all hover:border-slate-400 hover:shadow-sm ${classeVisual}`}
     >
       <p className="text-sm text-muted-foreground">
         {titulo}
@@ -1020,9 +922,10 @@ function ResumoCard({
 
       <p
         className={
-          destaque
-            ? "mt-2 text-3xl font-bold text-amber-900"
-            : "mt-2 text-3xl font-bold"
+          destaque &&
+          !ativo
+            ? "mt-2 text-3xl font-bold text-amber-900 group-hover:underline"
+            : "mt-2 text-3xl font-bold group-hover:underline"
         }
       >
         {valor}
@@ -1031,15 +934,14 @@ function ResumoCard({
       <p className="mt-1 text-xs leading-5 text-muted-foreground">
         {descricao}
       </p>
-    </div>
+    </Link>
   );
 }
 
 function IconePendencia({
   texto,
 }: {
-  texto:
-    string;
+  texto: string;
 }) {
   const normalizado =
     texto.toLowerCase();
@@ -1115,9 +1017,35 @@ function IconePendencia({
    PÁGINA
 ===================================================== */
 
-export default async function PendenciasPage() {
+export default async function PendenciasPage({
+  searchParams,
+}: {
+  searchParams:
+    Promise<SearchParamsPendencias>;
+}) {
+  const parametros =
+    await searchParams;
+
+  const filtroRecebido =
+    Array.isArray(
+      parametros.filtro
+    )
+      ? parametros.filtro[0]
+      : parametros.filtro;
+
+  const filtroAtivo =
+    ehFiltroPendencias(
+      filtroRecebido
+    )
+      ? filtroRecebido
+      : null;
+
   const supabase =
     await createClient();
+
+  /* ===================================================
+     AUTENTICAÇÃO
+  =================================================== */
 
   const {
     data:
@@ -1132,9 +1060,7 @@ export default async function PendenciasPage() {
 
   if (
     authError ||
-    !authData
-      ?.claims
-      ?.sub
+    !authData?.claims?.sub
   ) {
     redirect(
       "/auth/login"
@@ -1145,6 +1071,10 @@ export default async function PendenciasPage() {
     authData
       .claims
       .sub as string;
+
+  /* ===================================================
+     EMPRESA
+  =================================================== */
 
   const {
     data:
@@ -1179,7 +1109,9 @@ export default async function PendenciasPage() {
     );
   }
 
-  if (!membro) {
+  if (
+    !membro
+  ) {
     return (
       <main className="w-full">
         <section className="rounded-xl border border-amber-200 bg-amber-50 p-6">
@@ -1205,6 +1137,10 @@ export default async function PendenciasPage() {
     membro
       .empresa_id as string;
 
+  /* ===================================================
+     DILIGÊNCIAS
+  =================================================== */
+
   const {
     data:
       diligenciasConsulta,
@@ -1216,34 +1152,32 @@ export default async function PendenciasPage() {
       .from(
         "diligencias"
       )
-      .select(
-        `
-          id,
-          empresa_id,
-          tipo_diligencia,
-          modalidade,
-          numero_processo,
-          parte_autora,
-          parte_re,
-          data_diligencia,
-          horario,
-          vara,
-          comarca,
-          uf,
-          local,
-          correspondente_id,
-          necessita_preposto,
-          preposto_id,
-          testemunhas_status,
-          testemunhas_confirmadas,
-          contratacao_status,
-          contratacao_tipo,
-          contratacao_confirmada,
-          orientacoes_encaminhadas,
-          status,
-          excluida_em
-        `
-      )
+      .select(`
+        id,
+        empresa_id,
+        tipo_diligencia,
+        modalidade,
+        numero_processo,
+        parte_autora,
+        parte_re,
+        data_diligencia,
+        horario,
+        vara,
+        comarca,
+        uf,
+        local,
+        correspondente_id,
+        necessita_preposto,
+        preposto_id,
+        testemunhas_status,
+        testemunhas_confirmadas,
+        contratacao_status,
+        contratacao_tipo,
+        contratacao_confirmada,
+        orientacoes_encaminhadas,
+        status,
+        excluida_em
+      `)
       .eq(
         "empresa_id",
         empresaId
@@ -1283,14 +1217,17 @@ export default async function PendenciasPage() {
     (
       diligenciasConsulta ??
       []
-    ) as
-      DiligenciaBase[];
+    ) as DiligenciaBase[];
 
   const idsDiligencias =
     diligencias.map(
       (item) =>
         item.id
     );
+
+  /* ===================================================
+     TESTEMUNHAS
+  =================================================== */
 
   const contagemTestemunhas =
     new Map<
@@ -1367,6 +1304,10 @@ export default async function PendenciasPage() {
     }
   }
 
+  /* ===================================================
+     FINANCEIRO
+  =================================================== */
+
   const diligenciasComFinanceiro =
     new Set<string>();
 
@@ -1422,6 +1363,10 @@ export default async function PendenciasPage() {
       );
     }
   }
+
+  /* ===================================================
+     FILA OPERACIONAL
+  =================================================== */
 
   const agora =
     agoraEmRecife();
@@ -1496,7 +1441,8 @@ export default async function PendenciasPage() {
         (item) =>
           item
             .pendencias
-            .length > 0
+            .length >
+          0
       )
       .sort(
         (
@@ -1570,6 +1516,10 @@ export default async function PendenciasPage() {
         }
       );
 
+  /* ===================================================
+     CONTADORES
+  =================================================== */
+
   const aguardandoDesfecho =
     pendentes.filter(
       (item) =>
@@ -1606,8 +1556,65 @@ export default async function PendenciasPage() {
           .monitoramentoProximo
     ).length;
 
+  /* ===================================================
+     FILTRO ATIVO
+  =================================================== */
+
+  const pendentesFiltrados =
+    !filtroAtivo ||
+    filtroAtivo ===
+      "fila_operacional"
+      ? pendentes
+
+      : filtroAtivo ===
+          "atos_hoje_anteriores"
+        ? pendentes.filter(
+            (item) =>
+              item
+                .desfechoPendente
+          )
+
+        : filtroAtivo ===
+            "proximos_3_dias"
+          ? pendentes.filter(
+              (item) =>
+                !item
+                  .desfechoPendente &&
+                item.diasAte !==
+                  null &&
+                item.diasAte >=
+                  0 &&
+                item.diasAte <=
+                  3
+            )
+
+          : pendentes.filter(
+              (item) =>
+                !item
+                  .desfechoPendente &&
+                item.diasAte !==
+                  null &&
+                item.diasAte >=
+                  4 &&
+                item.diasAte <=
+                  15
+            );
+
+  const nomeFiltroAtivo =
+    filtroAtivo
+      ? NOMES_FILTROS[
+          filtroAtivo
+        ]
+      : null;
+
+  /* ===================================================
+     RENDERIZAÇÃO
+  =================================================== */
+
   return (
     <main className="w-full">
+      {/* CABEÇALHO */}
+
       <section className="mb-8">
         <p className="text-sm font-medium text-muted-foreground">
           Gestão operacional
@@ -1635,6 +1642,8 @@ export default async function PendenciasPage() {
         </div>
       </section>
 
+      {/* EXPLICAÇÃO */}
+
       <section className="mb-6 rounded-xl border border-slate-200 bg-slate-50 p-5">
         <div className="flex items-start gap-3">
           <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" />
@@ -1655,9 +1664,16 @@ export default async function PendenciasPage() {
         </div>
       </section>
 
+      {/* CARDS CLICÁVEIS */}
+
       <section className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <ResumoCard
           titulo="Na fila operacional"
+          href="/protected/pendencias?filtro=fila_operacional"
+          ativo={
+            filtroAtivo ===
+            "fila_operacional"
+          }
           valor={
             pendentes.length
           }
@@ -1680,6 +1696,11 @@ export default async function PendenciasPage() {
 
         <ResumoCard
           titulo="Atos de hoje e anteriores"
+          href="/protected/pendencias?filtro=atos_hoje_anteriores"
+          ativo={
+            filtroAtivo ===
+            "atos_hoje_anteriores"
+          }
           valor={
             aguardandoDesfecho
           }
@@ -1692,6 +1713,11 @@ export default async function PendenciasPage() {
 
         <ResumoCard
           titulo="Próximos 3 dias"
+          href="/protected/pendencias?filtro=proximos_3_dias"
+          ativo={
+            filtroAtivo ===
+            "proximos_3_dias"
+          }
           valor={
             proximos3Dias
           }
@@ -1704,6 +1730,11 @@ export default async function PendenciasPage() {
 
         <ResumoCard
           titulo="De 4 a 15 dias"
+          href="/protected/pendencias?filtro=de_4_a_15_dias"
+          ativo={
+            filtroAtivo ===
+            "de_4_a_15_dias"
+          }
           valor={
             de4a15Dias
           }
@@ -1714,6 +1745,52 @@ export default async function PendenciasPage() {
           }
         />
       </section>
+
+      {/* FILTRO ATIVO */}
+
+      {filtroAtivo &&
+        nomeFiltroAtivo && (
+          <section className="mb-6 rounded-xl border bg-card px-5 py-4">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Filtro ativo
+                </p>
+
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <p className="font-semibold">
+                    {
+                      nomeFiltroAtivo
+                    }
+                  </p>
+
+                  <span className="text-sm text-muted-foreground">
+                    •
+                  </span>
+
+                  <p className="text-sm text-muted-foreground">
+                    {
+                      pendentesFiltrados.length
+                    }{" "}
+                    {pendentesFiltrados.length ===
+                    1
+                      ? "diligência"
+                      : "diligências"}
+                  </p>
+                </div>
+              </div>
+
+              <Link
+                href="/protected/pendencias"
+                className="inline-flex w-fit items-center justify-center rounded-lg border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
+              >
+                Limpar filtro
+              </Link>
+            </div>
+          </section>
+        )}
+
+      {/* FILA VAZIA */}
 
       {pendentes.length ===
         0 && (
@@ -1741,7 +1818,41 @@ export default async function PendenciasPage() {
         </section>
       )}
 
+      {/* FILTRO SEM RESULTADO */}
+
       {pendentes.length >
+        0 &&
+        pendentesFiltrados.length ===
+          0 && (
+          <section className="rounded-xl border border-slate-200 bg-slate-50 p-10 text-center">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-white">
+              <FileWarning className="h-6 w-6 text-muted-foreground" />
+            </div>
+
+            <h2 className="mt-4 text-xl font-semibold">
+              Nenhuma diligência neste filtro
+            </h2>
+
+            <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
+              A fila possui diligências, mas nenhuma se enquadra em{" "}
+              <strong>
+                {nomeFiltroAtivo}
+              </strong>{" "}
+              neste momento.
+            </p>
+
+            <Link
+              href="/protected/pendencias"
+              className="mt-6 inline-flex items-center rounded-lg border bg-background px-4 py-2.5 text-sm font-medium hover:bg-muted"
+            >
+              Limpar filtro
+            </Link>
+          </section>
+        )}
+
+      {/* LISTAGEM */}
+
+      {pendentesFiltrados.length >
         0 && (
         <section className="rounded-xl border bg-card">
           <div className="border-b px-6 py-5">
@@ -1750,7 +1861,8 @@ export default async function PendenciasPage() {
 
               <div>
                 <h2 className="text-lg font-semibold">
-                  Fila de tratamento
+                  {nomeFiltroAtivo ??
+                    "Fila de tratamento"}
                 </h2>
 
                 <p className="mt-1 text-sm text-muted-foreground">
@@ -1761,7 +1873,7 @@ export default async function PendenciasPage() {
           </div>
 
           <div className="divide-y">
-            {pendentes.map(
+            {pendentesFiltrados.map(
               (
                 diligencia
               ) => {
@@ -1807,9 +1919,11 @@ export default async function PendenciasPage() {
                           </span>
 
                           <span className="rounded-full border bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground">
-                            {diligencia
-                              .pendencias
-                              .length}{" "}
+                            {
+                              diligencia
+                                .pendencias
+                                .length
+                            }{" "}
                             {diligencia
                               .pendencias
                               .length ===
@@ -1925,7 +2039,8 @@ export default async function PendenciasPage() {
                         </p>
 
                         <p className="mt-1 text-sm font-medium">
-                          {diligencia.vara ||
+                          {diligencia
+                            .vara ||
                             "Não informada"}
                         </p>
                       </div>
@@ -1938,10 +2053,12 @@ export default async function PendenciasPage() {
                         <div className="mt-1 flex items-center gap-2 text-sm font-medium">
                           <MapPin className="h-4 w-4 text-muted-foreground" />
 
-                          {diligencia.comarca ||
+                          {diligencia
+                            .comarca ||
                             "Não informada"}
 
-                          {diligencia.uf
+                          {diligencia
+                            .uf
                             ? `/${diligencia.uf}`
                             : ""}
                         </div>
