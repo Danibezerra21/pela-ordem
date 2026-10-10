@@ -623,14 +623,9 @@ export function OnboardingEmpresaForm() {
             />
 
             <p className="text-xs leading-5 text-muted-foreground">
-              O NOTE LITIS não
-              armazenará o número
-              completo do documento.
-              Ele será utilizado para
-              identificar a conta e
-              impedir múltiplos
-              períodos gratuitos para
-              o mesmo CPF ou CNPJ.
+                O número completo do CPF ou CNPJ não ficará armazenado no cadastro.
+                O documento será utilizado para identificar a conta e verificar a
+                elegibilidade ao período gratuito.
             </p>
           </div>
 

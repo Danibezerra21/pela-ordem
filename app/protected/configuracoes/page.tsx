@@ -861,14 +861,7 @@ export default async function ConfiguracoesPage() {
             </div>
           </div>
         )}
-
-
-        <div className="mt-6 rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground">
-          A contratação, alteração e
-          cancelamento de planos serão
-          habilitados nesta área na próxima
-          etapa da integração com o Asaas.
-        </div>
+        
       </section>
 
 
