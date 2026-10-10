@@ -8,6 +8,10 @@ import {
   createClient,
 } from "@/lib/supabase/server";
 
+import {
+  temPermissao,
+} from "@/lib/permissoes";
+
 
 export type PagamentoState = {
   status:
@@ -48,13 +52,28 @@ function uuidValido(
 export async function alterarPagamentoContratacao(
   _estadoAnterior:
     PagamentoState,
-  formData: FormData
+
+  formData:
+    FormData
 ): Promise<PagamentoState> {
 
   const contratacaoId =
     lerCampo(
       formData,
       "contratacao_id"
+    );
+
+  /*
+    O diligencia_id é usado apenas
+    para revalidar a página.
+
+    A operação financeira não depende
+    dele para ser autorizada.
+  */
+  const diligenciaId =
+    lerCampo(
+      formData,
+      "diligencia_id"
     );
 
   const pago =
@@ -112,6 +131,23 @@ export async function alterarPagamentoContratacao(
   }
 
 
+  const podeGerenciar =
+    await temPermissao(
+      "financeiro.gerenciar"
+    );
+
+
+  if (!podeGerenciar) {
+    return {
+      status:
+        "erro",
+
+      mensagem:
+        "Você não possui permissão para alterar o pagamento desta contratação.",
+    };
+  }
+
+
   const {
     error,
   } =
@@ -147,6 +183,17 @@ export async function alterarPagamentoContratacao(
     "/protected/diligencias"
   );
 
+  if (
+    diligenciaId &&
+    uuidValido(
+      diligenciaId
+    )
+  ) {
+    revalidatePath(
+      `/protected/diligencias/${diligenciaId}`
+    );
+  }
+
   revalidatePath(
     "/protected/pendencias"
   );
@@ -162,7 +209,7 @@ export async function alterarPagamentoContratacao(
 
     mensagem:
       pago
-        ? "Pagamento registrado com sucesso."
-        : "O registro de pagamento foi desfeito.",
+        ? "Diligência paga com sucesso."
+        : "Pagamento da diligência desfeito com sucesso.",
   };
 }

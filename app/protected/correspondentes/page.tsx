@@ -24,7 +24,6 @@ import {
   alternarStatusCorrespondente,
 } from "./actions";
 
-export const instant = false;
 
 /* =====================================================
    TIPOS

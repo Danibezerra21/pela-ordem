@@ -5,14 +5,6 @@ import type {
 import Link from "next/link";
 
 import {
-  BotaoEditarDiligencia,
-} from "./botao-editar-diligencia";
-
-import {
-  BotaoCancelarDiligencia,
-} from "./botao-cancelar-diligencia";
-
-import {
   notFound,
   redirect,
 } from "next/navigation";
@@ -26,6 +18,7 @@ import {
   FileText,
   MapPin,
   Monitor,
+  Pencil,
   Scale,
   UserRound,
   UsersRound,
@@ -35,8 +28,21 @@ import {
   createClient,
 } from "@/lib/supabase/server";
 
+import {
+  temPermissao,
+} from "@/lib/permissoes";
+
+import {
+  ControlePagamento,
+} from "../controle-pagamento";
+
+import {
+  BotaoCancelarDiligencia,
+} from "./botao-cancelar-diligencia";
+
+
 /* =====================================================
-   TIPOS CANÔNICOS
+   TIPOS
 ===================================================== */
 
 type ContratacaoStatus =
@@ -54,6 +60,7 @@ type TestemunhasStatus =
   | "confirmadas"
   | "desnecessarias"
   | null;
+
 
 type Diligencia = {
   id: string;
@@ -95,22 +102,12 @@ type Diligencia = {
   correspondente_id:
     string | null;
 
-  /*
-    null  = ainda não definido
-    false = preposto desnecessário
-    true  = preposto necessário
-  */
   necessita_preposto:
     boolean | null;
 
   preposto_id:
     string | null;
 
-  /*
-    Mantemos string para suportar eventual
-    registro antigo ou variação anterior,
-    mas normalizamos para o modelo canônico.
-  */
   testemunhas_status?:
     string | null;
 
@@ -135,6 +132,11 @@ type Diligencia = {
   status:
     string;
 
+  financeiro_status?:
+  | "liberado_para_pagamento"
+  | "nao_aplicavel"
+  | null;  
+
   origem:
     string | null;
 
@@ -148,6 +150,7 @@ type Diligencia = {
     string | null;
 };
 
+
 type Advogado = {
   id: string;
 
@@ -160,6 +163,7 @@ type Advogado = {
     string | null;
 };
 
+
 type Preposto = {
   id: string;
 
@@ -169,6 +173,7 @@ type Preposto = {
     string | null;
 };
 
+
 type Testemunha = {
   id: string;
 
@@ -177,6 +182,7 @@ type Testemunha = {
   cpf:
     string | null;
 };
+
 
 type ContratacaoDetalhe = {
   id?:
@@ -197,12 +203,25 @@ type ContratacaoDetalhe = {
   pagamento_combinado_em?:
     string | null;
 
+  pagamento_devido?:
+    boolean | null;
+
   pago_em?:
+    string | null;
+
+  pago_por?:
+    string | null;
+
+  pagamento_desfeito_em?:
+    string | null;
+
+  pagamento_desfeito_por?:
     string | null;
 
   criado_em?:
     string | null;
 };
+
 
 type DetalhesDiligencia = {
   diligencia:
@@ -220,6 +239,7 @@ type DetalhesDiligencia = {
   contratacoes?:
     ContratacaoDetalhe[];
 };
+
 
 /* =====================================================
    FORMATAÇÃO
@@ -240,7 +260,8 @@ function formatarProcesso(
     );
 
   if (
-    numeros.length !== 20
+    numeros.length !==
+    20
   ) {
     return processo;
   }
@@ -254,6 +275,7 @@ function formatarProcesso(
     `${numeros.slice(16, 20)}`
   );
 }
+
 
 function formatarData(
   data:
@@ -287,6 +309,7 @@ function formatarData(
   return `${dia}/${mes}/${ano}`;
 }
 
+
 function formatarDataHora(
   data:
     string | null | undefined
@@ -296,7 +319,9 @@ function formatarDataHora(
   }
 
   const objeto =
-    new Date(data);
+    new Date(
+      data
+    );
 
   if (
     Number.isNaN(
@@ -332,6 +357,7 @@ function formatarDataHora(
   );
 }
 
+
 function formatarCpf(
   cpf:
     string | null
@@ -347,7 +373,8 @@ function formatarCpf(
     );
 
   if (
-    numeros.length !== 11
+    numeros.length !==
+    11
   ) {
     return cpf;
   }
@@ -359,6 +386,7 @@ function formatarCpf(
     `${numeros.slice(9, 11)}`
   );
 }
+
 
 function formatarValor(
   valor:
@@ -382,11 +410,13 @@ function formatarValor(
     typeof valor ===
     "number"
   ) {
-    numero = valor;
+    numero =
+      valor;
   } else {
     const texto =
-      String(valor)
-        .trim();
+      String(
+        valor
+      ).trim();
 
     if (
       texto.includes(",")
@@ -394,12 +424,20 @@ function formatarValor(
       numero =
         Number(
           texto
-            .replace(/\./g, "")
-            .replace(",", ".")
+            .replace(
+              /\./g,
+              ""
+            )
+            .replace(
+              ",",
+              "."
+            )
         );
     } else {
       numero =
-        Number(texto);
+        Number(
+          texto
+        );
     }
   }
 
@@ -408,7 +446,9 @@ function formatarValor(
       numero
     )
   ) {
-    return String(valor);
+    return String(
+      valor
+    );
   }
 
   return new Intl.NumberFormat(
@@ -425,12 +465,14 @@ function formatarValor(
   );
 }
 
+
 /* =====================================================
    NOMES
 ===================================================== */
 
 function nomeStatus(
-  status: string
+  status:
+    string
 ) {
   if (
     status === "ativa"
@@ -455,6 +497,7 @@ function nomeStatus(
   return status;
 }
 
+
 function nomeOrigem(
   origem:
     string | null
@@ -472,9 +515,12 @@ function nomeOrigem(
     return "Importação";
   }
 
-  return origem ||
-    "Não informada";
+  return (
+    origem ||
+    "Não informada"
+  );
 }
+
 
 function normalizarContratacaoTipo(
   valor:
@@ -491,6 +537,7 @@ function normalizarContratacaoTipo(
 
   return null;
 }
+
 
 function nomeContratacaoTipo(
   tipo:
@@ -518,8 +565,9 @@ function nomeContratacaoTipo(
   return null;
 }
 
+
 /* =====================================================
-   NORMALIZAÇÃO DOS ESTADOS
+   NORMALIZAÇÃO
 ===================================================== */
 
 function obterContratacaoStatus(
@@ -529,7 +577,7 @@ function obterContratacaoStatus(
   if (
     diligencia
       .contratacao_status ===
-      "confirmada"
+    "confirmada"
   ) {
     return "confirmada";
   }
@@ -537,30 +585,22 @@ function obterContratacaoStatus(
   if (
     diligencia
       .contratacao_status ===
-      "desnecessaria"
+    "desnecessaria"
   ) {
     return "desnecessaria";
   }
 
-  /*
-    Compatibilidade com registros antigos.
-
-    TRUE prova que houve contratação.
-
-    FALSE não prova que a contratação
-    era desnecessária. Pode simplesmente
-    significar que ainda não havia tratamento.
-  */
   if (
     diligencia
       .contratacao_confirmada ===
-      true
+    true
   ) {
     return "confirmada";
   }
 
   return null;
 }
+
 
 function obterTestemunhasStatus(
   diligencia:
@@ -577,11 +617,6 @@ function obterTestemunhasStatus(
     return "confirmadas";
   }
 
-  /*
-    Aceitamos também singular apenas
-    como proteção contra eventual dado
-    antigo cadastrado anteriormente.
-  */
   if (
     valor ===
       "desnecessarias" ||
@@ -591,17 +626,10 @@ function obterTestemunhasStatus(
     return "desnecessarias";
   }
 
-  /*
-    Registro legado TRUE permite afirmar
-    que testemunhas foram confirmadas.
-
-    FALSE não deve ser convertido
-    automaticamente em desnecessárias.
-  */
   if (
     diligencia
       .testemunhas_confirmadas ===
-      true
+    true
   ) {
     return "confirmadas";
   }
@@ -609,27 +637,33 @@ function obterTestemunhasStatus(
   return null;
 }
 
+
 function inferirContratacaoTipo(
   tipo:
     ContratacaoTipo,
+
   contratacoes:
     ContratacaoDetalhe[]
 ): ContratacaoTipo {
-  if (tipo) {
+  if (
+    tipo
+  ) {
     return tipo;
   }
 
   const temAdvogado =
     contratacoes.some(
       (item) =>
-        item.tipo_profissional ===
+        item
+          .tipo_profissional ===
         "advogado"
     );
 
   const temPreposto =
     contratacoes.some(
       (item) =>
-        item.tipo_profissional ===
+        item
+          .tipo_profissional ===
         "preposto"
     );
 
@@ -640,19 +674,24 @@ function inferirContratacaoTipo(
     return "advogado_preposto";
   }
 
-  if (temAdvogado) {
+  if (
+    temAdvogado
+  ) {
     return "advogado";
   }
 
-  if (temPreposto) {
+  if (
+    temPreposto
+  ) {
     return "preposto";
   }
 
   return null;
 }
 
+
 /* =====================================================
-   COMPONENTES VISUAIS
+   COMPONENTES
 ===================================================== */
 
 type SituacaoVisual =
@@ -660,6 +699,7 @@ type SituacaoVisual =
   | "pendente"
   | "alerta"
   | "informativa";
+
 
 function classesSituacao(
   situacao:
@@ -725,14 +765,17 @@ function classesSituacao(
   };
 }
 
+
 function LinhaTratamento({
   titulo,
   valor,
   situacao,
 }: {
-  titulo: string;
+  titulo:
+    string;
 
-  valor: string;
+  valor:
+    string;
 
   situacao:
     SituacaoVisual;
@@ -772,14 +815,17 @@ function LinhaTratamento({
   );
 }
 
+
 function CampoDetalhe({
   titulo,
   valor,
   ocuparDuasColunas = false,
 }: {
-  titulo: string;
+  titulo:
+    string;
 
-  valor: string;
+  valor:
+    string;
 
   ocuparDuasColunas?:
     boolean;
@@ -796,21 +842,24 @@ function CampoDetalhe({
         {titulo}
       </p>
 
-      <p className="mt-2 font-medium">
+      <p className="mt-2 break-words font-medium">
         {valor}
       </p>
     </div>
   );
 }
 
+
 function ResumoCard({
   titulo,
   valor,
   icone,
 }: {
-  titulo: string;
+  titulo:
+    string;
 
-  valor: string;
+  valor:
+    string;
 
   icone:
     ReactNode;
@@ -832,6 +881,7 @@ function ResumoCard({
   );
 }
 
+
 /* =====================================================
    PÁGINA
 ===================================================== */
@@ -841,14 +891,18 @@ export default async function DiligenciaPage({
 }: {
   params:
     Promise<{
-      id: string;
+      id:
+        string;
     }>;
 }) {
-  const { id } =
+  const {
+    id,
+  } =
     await params;
 
   const supabase =
     await createClient();
+
 
   /* ===================================================
      AUTENTICAÇÃO
@@ -876,8 +930,28 @@ export default async function DiligenciaPage({
     );
   }
 
+
   /* ===================================================
-     DADOS DA DILIGÊNCIA
+     PERMISSÕES
+  =================================================== */
+
+  const [
+    podeEditar,
+    podeGerenciarFinanceiro,
+  ] =
+    await Promise.all([
+      temPermissao(
+        "diligencias.editar"
+      ),
+
+      temPermissao(
+        "financeiro.gerenciar"
+      ),
+    ]);
+
+
+  /* ===================================================
+     DADOS
   =================================================== */
 
   const {
@@ -892,13 +966,17 @@ export default async function DiligenciaPage({
       }
     );
 
-  if (error) {
+  if (
+    error
+  ) {
     throw new Error(
       `Erro ao carregar diligência: ${error.message}`
     );
   }
 
-  if (!data) {
+  if (
+    !data
+  ) {
     notFound();
   }
 
@@ -909,7 +987,9 @@ export default async function DiligenciaPage({
   const diligencia =
     detalhes.diligencia;
 
-  if (!diligencia) {
+  if (
+    !diligencia
+  ) {
     notFound();
   }
 
@@ -929,8 +1009,9 @@ export default async function DiligenciaPage({
     detalhes.contratacoes ??
     [];
 
+
   /* ===================================================
-     ESTADOS CANÔNICOS
+     ESTADOS
   =================================================== */
 
   const contratacaoStatus =
@@ -969,13 +1050,12 @@ export default async function DiligenciaPage({
     contratacaoTipo ===
       "advogado_preposto";
 
-  /* ===================================================
-     CONTRATAÇÃO
-  =================================================== */
+
+  /* CONTRATAÇÃO */
 
   const textoContratacao =
     contratacaoStatus ===
-    "confirmada"
+      "confirmada"
       ? "Confirmada"
       : contratacaoStatus ===
           "desnecessaria"
@@ -989,9 +1069,8 @@ export default async function DiligenciaPage({
         ? "pendente"
         : "resolvida";
 
-  /* ===================================================
-     PREPOSTO
-  =================================================== */
+
+  /* PREPOSTO */
 
   let textoPreposto:
     string;
@@ -1002,7 +1081,7 @@ export default async function DiligenciaPage({
   if (
     diligencia
       .necessita_preposto ===
-      null
+    null
   ) {
     textoPreposto =
       "Pendente de definição";
@@ -1012,20 +1091,16 @@ export default async function DiligenciaPage({
   } else if (
     diligencia
       .necessita_preposto ===
-      false
+    false
   ) {
-    /*
-      NÃO É PENDÊNCIA.
-
-      O controller já decidiu que
-      aquele participante não é necessário.
-    */
     textoPreposto =
       "Desnecessário";
 
     situacaoPreposto =
       "resolvida";
-  } else if (preposto) {
+  } else if (
+    preposto
+  ) {
     textoPreposto =
       "Designado";
 
@@ -1039,15 +1114,8 @@ export default async function DiligenciaPage({
       "pendente";
   }
 
-  /* ===================================================
-     TESTEMUNHAS
 
-     REGRA CENTRAL:
-     "Desnecessárias" representa decisão
-     operacional concluída.
-
-     Nunca configura pendência.
-  =================================================== */
+  /* TESTEMUNHAS */
 
   let textoTestemunhas:
     string;
@@ -1078,11 +1146,6 @@ export default async function DiligenciaPage({
       situacaoTestemunhas =
         "resolvida";
     } else {
-      /*
-        Aqui existe uma inconsistência real:
-        foi decidido que existem testemunhas
-        confirmadas, mas nenhuma foi vinculada.
-      */
       textoTestemunhas =
         "Confirmadas, mas sem testemunha vinculada";
 
@@ -1090,10 +1153,6 @@ export default async function DiligenciaPage({
         "alerta";
     }
   } else {
-    /*
-      Somente NULL representa decisão
-      ainda não tomada.
-    */
     textoTestemunhas =
       "Pendente de definição";
 
@@ -1101,9 +1160,8 @@ export default async function DiligenciaPage({
       "pendente";
   }
 
-  /* ===================================================
-     ORIENTAÇÕES
-  =================================================== */
+
+  /* ORIENTAÇÕES */
 
   const textoOrientacoes =
     diligencia
@@ -1118,13 +1176,9 @@ export default async function DiligenciaPage({
         ? "resolvida"
         : "pendente";
 
+
   /* ===================================================
-     PENDÊNCIAS OPERACIONAIS
-
-     Só incluímos aquilo que efetivamente
-     demanda atuação do controller.
-
-     "Desnecessário" nunca entra aqui.
+     PENDÊNCIAS
   =================================================== */
 
   const pendencias:
@@ -1134,8 +1188,6 @@ export default async function DiligenciaPage({
     diligencia.status ===
     "ativa"
   ) {
-    /* CONTRATAÇÃO */
-
     if (
       contratacaoStatus ===
       null
@@ -1145,21 +1197,11 @@ export default async function DiligenciaPage({
       );
     }
 
-    /*
-      Contratação desnecessária está resolvida.
-      Nenhuma providência adicional.
-    */
-
     if (
       contratacaoStatus ===
         "confirmada" &&
       !contratacaoTipo
     ) {
-      /*
-        Isto é inconsistência de uma
-        contratação já marcada como confirmada,
-        não mera informação visual.
-      */
       pendencias.push(
         "Revisar os profissionais vinculados à contratação confirmada."
       );
@@ -1203,12 +1245,10 @@ export default async function DiligenciaPage({
       );
     }
 
-    /* PREPOSTO */
-
     if (
       diligencia
         .necessita_preposto ===
-        null
+      null
     ) {
       pendencias.push(
         "Definir se a diligência necessita de preposto."
@@ -1225,15 +1265,6 @@ export default async function DiligenciaPage({
         "Designar o preposto da diligência."
       );
     }
-
-    /*
-      necessita_preposto === false
-      significa RESOLVIDO.
-
-      Não adicionamos qualquer pendência.
-    */
-
-    /* TESTEMUNHAS */
 
     if (
       testemunhasStatus ===
@@ -1255,15 +1286,6 @@ export default async function DiligenciaPage({
       );
     }
 
-    /*
-      testemunhasStatus === "desnecessarias"
-      significa RESOLVIDO.
-
-      Nenhuma pendência é criada.
-    */
-
-    /* ORIENTAÇÕES */
-
     if (
       !diligencia
         .orientacoes_encaminhadas
@@ -1284,15 +1306,15 @@ export default async function DiligenciaPage({
         .cancelada_em
     );
 
+
   /* ===================================================
      RENDER
   =================================================== */
 
   return (
     <main className="w-full">
-      {/* =================================================
-          CABEÇALHO
-      ================================================== */}
+
+      {/* CABEÇALHO */}
 
       <section className="mb-8">
         <Link
@@ -1308,7 +1330,7 @@ export default async function DiligenciaPage({
           <div>
             <div className="flex flex-wrap items-center gap-3">
               <p className="text-sm font-medium text-muted-foreground">
-                Gestão operacional
+                Gestão da diligência
               </p>
 
               <span
@@ -1356,15 +1378,22 @@ export default async function DiligenciaPage({
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-3">
-            {diligencia.status !==
+
+          {/* AÇÕES OPERACIONAIS */}
+
+          {podeEditar &&
+            diligencia.status !==
               "cancelada" && (
               <div className="flex flex-wrap items-center gap-3">
-                <BotaoEditarDiligencia
-                  diligenciaId={
-                    diligencia.id
-                  }
-                />
+
+                <Link
+                  href={`/protected/diligencias/${diligencia.id}/editar`}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#0b1f3a] px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90"
+                >
+                  <Pencil className="h-4 w-4" />
+
+                  Editar
+                </Link>
 
                 {diligencia.status !==
                   "concluida" && (
@@ -1374,15 +1403,15 @@ export default async function DiligenciaPage({
                     }
                   />
                 )}
+
               </div>
             )}
-          </div>
+
         </div>
       </section>
 
-      {/* =================================================
-          CANCELAMENTO
-      ================================================== */}
+
+      {/* CANCELADA */}
 
       {diligencia.status ===
         "cancelada" && (
@@ -1407,9 +1436,8 @@ export default async function DiligenciaPage({
         </section>
       )}
 
-      {/* =================================================
-          RESUMO
-      ================================================== */}
+
+      {/* RESUMO */}
 
       <section className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <ResumoCard
@@ -1442,13 +1470,15 @@ export default async function DiligenciaPage({
         <ResumoCard
           titulo="Modalidade"
           valor={
-            diligencia.modalidade ===
+            diligencia
+              .modalidade ===
             "virtual"
               ? "Virtual"
               : "Presencial"
           }
           icone={
-            diligencia.modalidade ===
+            diligencia
+              .modalidade ===
             "virtual" ? (
               <Monitor className="h-4 w-4" />
             ) : (
@@ -1469,9 +1499,8 @@ export default async function DiligenciaPage({
         />
       </section>
 
-      {/* =================================================
-          SITUAÇÃO OPERACIONAL
-      ================================================== */}
+
+      {/* SITUAÇÃO OPERACIONAL */}
 
       {diligencia.status ===
         "ativa" && (
@@ -1542,19 +1571,14 @@ export default async function DiligenciaPage({
         </section>
       )}
 
-      {/* =================================================
-          CONTEÚDO
-      ================================================== */}
 
       <div className="grid gap-6 xl:grid-cols-[1.35fr_1fr]">
-        {/* =================================================
-            COLUNA PRINCIPAL
-        ================================================== */}
+
+        {/* COLUNA PRINCIPAL */}
 
         <div className="space-y-6">
-          {/* ===============================================
-              DADOS DA DILIGÊNCIA
-          ================================================ */}
+
+          {/* DADOS */}
 
           <section className="rounded-xl border bg-card">
             <div className="border-b px-6 py-5">
@@ -1585,30 +1609,26 @@ export default async function DiligenciaPage({
               <CampoDetalhe
                 titulo="Vara / unidade"
                 valor={
-                  diligencia.vara ||
+                  diligencia
+                    .vara ||
                   "Não informada"
                 }
               />
 
               <CampoDetalhe
                 titulo="Comarca"
-                valor={
-                  `${
-                    diligencia
-                      .comarca ||
-                    "Não informada"
-                  }${
-                    diligencia.uf
-                      ? `/${diligencia.uf}`
-                      : ""
-                  }`
-                }
+                valor={`${diligencia.comarca || "Não informada"}${
+                  diligencia.uf
+                    ? `/${diligencia.uf}`
+                    : ""
+                }`}
               />
 
               <CampoDetalhe
                 titulo="Local"
                 valor={
-                  diligencia.local ||
+                  diligencia
+                    .local ||
                   "Não informado"
                 }
                 ocuparDuasColunas
@@ -1616,9 +1636,8 @@ export default async function DiligenciaPage({
             </div>
           </section>
 
-          {/* ===============================================
-              PARTICIPANTES
-          ================================================ */}
+
+          {/* PARTICIPANTES */}
 
           <section className="rounded-xl border bg-card">
             <div className="border-b px-6 py-5">
@@ -1638,6 +1657,7 @@ export default async function DiligenciaPage({
             </div>
 
             <div className="divide-y">
+
               {/* ADVOGADO */}
 
               <div className="p-6">
@@ -1667,7 +1687,8 @@ export default async function DiligenciaPage({
                       <>
                         <p className="mt-2 font-semibold">
                           {
-                            advogado.nome
+                            advogado
+                              .nome
                           }
                         </p>
 
@@ -1688,6 +1709,7 @@ export default async function DiligenciaPage({
                 </div>
               </div>
 
+
               {/* PREPOSTO */}
 
               <div className="p-6">
@@ -1707,9 +1729,7 @@ export default async function DiligenciaPage({
                           ).badge
                         }`}
                       >
-                        {
-                          textoPreposto
-                        }
+                        {textoPreposto}
                       </span>
                     </div>
 
@@ -1717,7 +1737,8 @@ export default async function DiligenciaPage({
                       <>
                         <p className="mt-2 font-semibold">
                           {
-                            preposto.nome
+                            preposto
+                              .nome
                           }
                         </p>
 
@@ -1749,6 +1770,7 @@ export default async function DiligenciaPage({
                 </div>
               </div>
 
+
               {/* TESTEMUNHAS */}
 
               <div className="p-6">
@@ -1768,9 +1790,7 @@ export default async function DiligenciaPage({
                           ).badge
                         }`}
                       >
-                        {
-                          textoTestemunhas
-                        }
+                        {textoTestemunhas}
                       </span>
                     </div>
 
@@ -1811,7 +1831,7 @@ export default async function DiligenciaPage({
                         Não há necessidade de testemunhas para este ato.
                       </p>
                     ) : testemunhasStatus ===
-                        null ? (
+                      null ? (
                       <p className="mt-2 text-sm text-amber-800">
                         A necessidade de testemunhas ainda não foi definida.
                       </p>
@@ -1823,18 +1843,12 @@ export default async function DiligenciaPage({
                   </div>
                 </div>
               </div>
+
             </div>
           </section>
 
-          {/* ===============================================
-              DADOS DA CONTRATAÇÃO
 
-              Só aparece quando houve contratação.
-
-              Não exibimos a linha redundante
-              "Profissionais contratados:
-              Não informado".
-          ================================================ */}
+          {/* FINANCEIRO */}
 
           {contratacaoStatus ===
             "confirmada" && (
@@ -1850,16 +1864,6 @@ export default async function DiligenciaPage({
               </div>
 
               <div className="p-6">
-                {/*
-
-                  O tipo só é exibido quando
-                  realmente existe informação.
-
-                  Nunca mostramos:
-                  "Profissionais contratados
-                  Não informado".
-
-                */}
 
                 {nomeTipoContratacao && (
                   <div className="mb-5">
@@ -1875,9 +1879,11 @@ export default async function DiligenciaPage({
                   </div>
                 )}
 
+
                 {contratacoes.length >
                 0 ? (
                   <div className="space-y-4">
+
                     {contratacoes.map(
                       (
                         contratacao,
@@ -1890,28 +1896,66 @@ export default async function DiligenciaPage({
                           }
                           className="rounded-xl border bg-muted/20 p-4"
                         >
-                          <div className="flex flex-wrap items-center justify-between gap-3">
-                            <p className="font-semibold">
-                              {contratacao.tipo_profissional ===
-                              "advogado"
-                                ? "Advogado"
-                                : "Preposto"}
-                            </p>
+                          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
 
-                            <span
-                              className={
-                                contratacao.pago_em
-                                  ? "rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800"
-                                  : "rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800"
-                              }
-                            >
-                              {contratacao.pago_em
-                                ? "Pago"
-                                : "Pagamento pendente"}
-                            </span>
+                            <div>
+                              <p className="font-semibold">
+                                {contratacao.tipo_profissional ===
+                                "advogado"
+                                  ? "Advogado"
+                                  : "Preposto"}
+                              </p>
+                            </div>
+
+
+                            {contratacao.id ? (
+                              <ControlePagamento
+                                contratacaoId={
+                                  contratacao.id
+                                }
+
+                                diligenciaId={
+                                  diligencia.id
+                                }
+
+                                pagoEm={
+                                  contratacao.pago_em ??
+                                  null
+                                }
+
+                                pagamentoDesfeitoEm={
+                                  contratacao.pagamento_desfeito_em ??
+                                  null
+                                }
+
+                                podeGerenciar={
+                                  podeGerenciarFinanceiro
+                                }
+
+                                liberadoParaPagamento={
+                                  diligencia.financeiro_status ===
+                                  "liberado_para_pagamento"
+                                }
+                              />
+                            ) : (
+                              <span
+                                className={
+                                  contratacao.pago_em
+                                    ? "inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800"
+                                    : "inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800"
+                                }
+                              >
+                                {contratacao.pago_em
+                                  ? "Pago"
+                                  : "Pagamento pendente"}
+                              </span>
+                            )}
+
                           </div>
 
-                          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+
+                          <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+
                             <CampoDetalhe
                               titulo="Valor"
                               valor={formatarValor(
@@ -1920,31 +1964,34 @@ export default async function DiligenciaPage({
                             />
 
                             <CampoDetalhe
-                              titulo={
-                                contratacao.pago_em
-                                  ? "Pago em"
-                                  : "Pagamento combinado"
-                              }
+                              titulo="Pagamento combinado"
                               valor={formatarData(
-                                contratacao.pago_em ??
-                                  contratacao.pagamento_combinado_em
+                                contratacao
+                                  .pagamento_combinado_em
                               )}
                             />
+
+                            <CampoDetalhe
+                              titulo="Pago em"
+                              valor={
+                                contratacao.pago_em
+                                  ? (
+                                      formatarDataHora(
+                                        contratacao.pago_em
+                                      ) ??
+                                      "Não informado"
+                                    )
+                                  : "Ainda não pago"
+                              }
+                            />
+
                           </div>
                         </div>
                       )
                     )}
+
                   </div>
                 ) : (
-                  /*
-                    Não criamos outro campo
-                    "não informado".
-
-                    Se existir contratação confirmada
-                    sem qualquer lançamento financeiro,
-                    mostramos apenas a inconsistência
-                    relevante para o controller.
-                  */
                   <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
                     <div className="flex items-start gap-3">
                       <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
@@ -1955,13 +2002,13 @@ export default async function DiligenciaPage({
                     </div>
                   </div>
                 )}
+
               </div>
             </section>
           )}
 
-          {/* ===============================================
-              OBSERVAÇÕES
-          ================================================ */}
+
+          {/* OBSERVAÇÕES */}
 
           <section className="rounded-xl border bg-card">
             <div className="border-b px-6 py-5">
@@ -1978,22 +2025,15 @@ export default async function DiligenciaPage({
               </p>
             </div>
           </section>
+
         </div>
 
-        {/* =================================================
-            COLUNA LATERAL
-        ================================================== */}
+
+        {/* COLUNA LATERAL */}
 
         <div className="space-y-6">
-          {/* ===============================================
-              TRATAMENTO
 
-              Aqui mostramos apenas estados
-              operacionais relevantes.
-
-              Foi removida a linha separada
-              "Profissionais contratados".
-          ================================================ */}
+          {/* TRATAMENTO */}
 
           <section className="rounded-xl border bg-card">
             <div className="border-b px-6 py-5">
@@ -2049,9 +2089,8 @@ export default async function DiligenciaPage({
             </div>
           </section>
 
-          {/* ===============================================
-              RESUMO OPERACIONAL
-          ================================================ */}
+
+          {/* RESUMO OPERACIONAL */}
 
           <section className="rounded-xl border bg-card">
             <div className="border-b px-6 py-5">
@@ -2061,6 +2100,7 @@ export default async function DiligenciaPage({
             </div>
 
             <div className="space-y-4 p-6 text-sm">
+
               <div className="flex items-center justify-between gap-3">
                 <span className="text-muted-foreground">
                   Status
@@ -2072,6 +2112,7 @@ export default async function DiligenciaPage({
                   )}
                 </strong>
               </div>
+
 
               <div className="flex items-center justify-between gap-3">
                 <span className="text-muted-foreground">
@@ -2085,6 +2126,7 @@ export default async function DiligenciaPage({
                 </strong>
               </div>
 
+
               <div className="flex items-center justify-between gap-3">
                 <span className="text-muted-foreground">
                   Advogado
@@ -2096,6 +2138,7 @@ export default async function DiligenciaPage({
                     : "Sem vínculo"}
                 </strong>
               </div>
+
 
               <div className="flex items-center justify-between gap-3">
                 <span className="text-muted-foreground">
@@ -2109,6 +2152,7 @@ export default async function DiligenciaPage({
                 </strong>
               </div>
 
+
               <div className="flex items-center justify-between gap-3">
                 <span className="text-muted-foreground">
                   Preposto
@@ -2120,6 +2164,7 @@ export default async function DiligenciaPage({
                   }
                 </strong>
               </div>
+
 
               <div className="flex items-center justify-between gap-3">
                 <span className="text-muted-foreground">
@@ -2133,6 +2178,7 @@ export default async function DiligenciaPage({
                 </strong>
               </div>
 
+
               <div className="flex items-center justify-between gap-3">
                 <span className="text-muted-foreground">
                   Orientações
@@ -2144,6 +2190,7 @@ export default async function DiligenciaPage({
                   }
                 </strong>
               </div>
+
 
               {diligencia.status ===
                 "ativa" && (
@@ -2168,12 +2215,12 @@ export default async function DiligenciaPage({
                   </div>
                 </div>
               )}
+
             </div>
           </section>
 
-          {/* ===============================================
-              CONTRATAÇÃO DESNECESSÁRIA
-          ================================================ */}
+
+          {/* CONTRATAÇÃO DESNECESSÁRIA */}
 
           {contratacaoStatus ===
             "desnecessaria" && (
@@ -2193,6 +2240,7 @@ export default async function DiligenciaPage({
               </div>
             </section>
           )}
+
         </div>
       </div>
     </main>

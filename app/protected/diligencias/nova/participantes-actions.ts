@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
@@ -27,12 +28,23 @@ export type TestemunhaParticipante = {
 
 type ResultadoBusca<T> =
   | {
+      status: "ativo";
       encontrado: true;
+      desativado: false;
       participante: T;
       mensagem: string;
     }
   | {
+      status: "desativado";
       encontrado: false;
+      desativado: true;
+      participante: T;
+      mensagem: string;
+    }
+  | {
+      status: "nao_encontrado";
+      encontrado: false;
+      desativado: false;
       participante: null;
       mensagem: string;
     };
@@ -44,62 +56,183 @@ type ResultadoCadastro<T> = {
   mensagem: string;
 };
 
-function normalizarTexto(valor: string) {
+type ResultadoReativacao<T> = {
+  sucesso: true;
+  participante: T;
+  mensagem: string;
+};
+
+type AdvogadoBanco = {
+  id: string;
+  nome: string;
+  tipo: string;
+  oab_numero: string | null;
+  oab_uf: string | null;
+  ativo: boolean;
+};
+
+type PrepostoBanco = {
+  id: string;
+  nome: string;
+  tipo: string;
+  cpf: string | null;
+  ativo: boolean;
+};
+
+function normalizarTexto(
+  valor: string
+) {
   return valor
     .trim()
     .replace(/\s+/g, " ")
     .toUpperCase();
 }
 
-function somenteNumeros(valor: string) {
-  return valor.replace(/\D/g, "");
+function somenteNumeros(
+  valor: string
+) {
+  return valor.replace(
+    /\D/g,
+    ""
+  );
 }
 
-function normalizarUF(valor: string) {
+function normalizarUF(
+  valor: string
+) {
   return valor
     .trim()
     .toUpperCase()
-    .replace(/[^A-Z]/g, "")
-    .slice(0, 2);
+    .replace(
+      /[^A-Z]/g,
+      ""
+    )
+    .slice(
+      0,
+      2
+    );
 }
 
-function validarCPFBasico(cpf: string) {
-  return somenteNumeros(cpf).length === 11;
+function validarCPFBasico(
+  cpf: string
+) {
+  return (
+    somenteNumeros(cpf)
+      .length === 11
+  );
+}
+
+function advogadoParticipante(
+  registro: AdvogadoBanco
+): AdvogadoParticipante {
+  return {
+    id:
+      registro.id,
+
+    nome:
+      registro.nome,
+
+    tipo:
+      "advogado",
+
+    oab_numero:
+      registro.oab_numero ??
+      "",
+
+    oab_uf:
+      registro.oab_uf ??
+      "",
+  };
+}
+
+function prepostoParticipante(
+  registro: PrepostoBanco
+): PrepostoParticipante {
+  return {
+    id:
+      registro.id,
+
+    nome:
+      registro.nome,
+
+    tipo:
+      "preposto",
+
+    cpf:
+      registro.cpf ??
+      "",
+  };
+}
+
+function atualizarPaginasCorrespondentes() {
+  revalidatePath(
+    "/protected"
+  );
+
+  revalidatePath(
+    "/protected/diligencias"
+  );
+
+  revalidatePath(
+    "/protected/correspondentes"
+  );
 }
 
 async function obterContextoUsuario() {
-  const supabase = await createClient();
+  const supabase:
+    any =
+    await createClient();
 
   const {
-    data: authData,
-    error: authError,
-  } = await supabase.auth.getClaims();
+    data:
+      authData,
+
+    error:
+      authError,
+  } =
+    await supabase
+      .auth
+      .getClaims();
 
   if (
     authError ||
-    !authData?.claims?.sub
+    !authData
+      ?.claims
+      ?.sub
   ) {
-    redirect("/auth/login");
+    redirect(
+      "/auth/login"
+    );
   }
 
   const usuarioId =
-    authData.claims.sub;
+    authData
+      .claims
+      .sub as string;
 
   const {
-    data: membro,
-    error: erroMembro,
-  } = await supabase
-    .from("membros_empresa")
-    .select("empresa_id")
-    .eq(
-      "usuario_id",
-      usuarioId
-    )
-    .eq(
-      "ativo",
-      true
-    )
-    .maybeSingle();
+    data:
+      membro,
+
+    error:
+      erroMembro,
+  } =
+    await supabase
+      .from(
+        "membros_empresa"
+      )
+      .select(
+        "empresa_id"
+      )
+      .eq(
+        "usuario_id",
+        usuarioId
+      )
+      .eq(
+        "ativo",
+        true
+      )
+      .maybeSingle();
 
   if (
     erroMembro ||
@@ -112,21 +245,140 @@ async function obterContextoUsuario() {
 
   return {
     supabase,
+
     empresaId:
-      membro.empresa_id,
+      membro
+        .empresa_id as string,
   };
+}
+
+async function buscarAdvogadoNoBanco(
+  supabase: any,
+  empresaId: string,
+  oabNumero: string,
+  oabUf: string
+): Promise<
+  AdvogadoBanco | null
+> {
+  const {
+    data,
+    error,
+  } =
+    await supabase
+      .from(
+        "correspondentes"
+      )
+      .select(
+        `
+          id,
+          nome,
+          tipo,
+          oab_numero,
+          oab_uf,
+          ativo
+        `
+      )
+      .eq(
+        "empresa_id",
+        empresaId
+      )
+      .eq(
+        "tipo",
+        "advogado"
+      )
+      .eq(
+        "oab_numero",
+        oabNumero
+      )
+      .eq(
+        "oab_uf",
+        oabUf
+      )
+      .is(
+        "excluido_em",
+        null
+      )
+      .maybeSingle();
+
+  if (error) {
+    throw new Error(
+      `Erro ao buscar advogado: ${error.message}`
+    );
+  }
+
+  return (
+    data as
+      | AdvogadoBanco
+      | null
+  );
+}
+
+async function buscarPrepostoNoBanco(
+  supabase: any,
+  empresaId: string,
+  cpf: string
+): Promise<
+  PrepostoBanco | null
+> {
+  const {
+    data,
+    error,
+  } =
+    await supabase
+      .from(
+        "correspondentes"
+      )
+      .select(
+        `
+          id,
+          nome,
+          tipo,
+          cpf,
+          ativo
+        `
+      )
+      .eq(
+        "empresa_id",
+        empresaId
+      )
+      .eq(
+        "tipo",
+        "preposto"
+      )
+      .eq(
+        "cpf",
+        cpf
+      )
+      .is(
+        "excluido_em",
+        null
+      )
+      .maybeSingle();
+
+  if (error) {
+    throw new Error(
+      `Erro ao buscar preposto: ${error.message}`
+    );
+  }
+
+  return (
+    data as
+      | PrepostoBanco
+      | null
+  );
 }
 
 /* =========================================================
    ADVOGADO
-   IDENTIFICAÇÃO: OAB + UF
 ========================================================= */
 
 export async function buscarAdvogado(
   oabNumeroInformado: string,
   oabUfInformada: string
 ): Promise<
-  ResultadoBusca<AdvogadoParticipante>
+  ResultadoBusca<
+    AdvogadoParticipante
+  >
 > {
   const {
     supabase,
@@ -150,71 +402,77 @@ export async function buscarAdvogado(
     );
   }
 
-  if (oabUf.length !== 2) {
+  if (
+    oabUf.length !== 2
+  ) {
     throw new Error(
       "Informe a UF da OAB."
     );
   }
 
-  const {
-    data,
-    error,
-  } = await supabase
-    .from("correspondentes")
-    .select(`
-      id,
-      nome,
-      tipo,
-      oab_numero,
-      oab_uf
-    `)
-    .eq(
-      "empresa_id",
-      empresaId
-    )
-    .eq(
-      "tipo",
-      "advogado"
-    )
-    .eq(
-      "oab_numero",
-      oabNumero
-    )
-    .eq(
-      "oab_uf",
+  const registro =
+    await buscarAdvogadoNoBanco(
+      supabase,
+      empresaId,
+      oabNumero,
       oabUf
-    )
-    .eq(
-      "ativo",
-      true
-    )
-    .is(
-      "excluido_em",
-      null
-    )
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(
-      `Erro ao buscar advogado: ${error.message}`
     );
-  }
 
-  if (!data) {
+  if (!registro) {
     return {
-      encontrado: false,
-      participante: null,
+      status:
+        "nao_encontrado",
+
+      encontrado:
+        false,
+
+      desativado:
+        false,
+
+      participante:
+        null,
 
       mensagem:
         "Nenhum advogado cadastrado com esta OAB e UF.",
     };
   }
 
-  return {
-    encontrado: true,
+  const participante =
+    advogadoParticipante(
+      registro
+    );
 
-    participante:
-      data as AdvogadoParticipante,
+  if (
+    !registro.ativo
+  ) {
+    return {
+      status:
+        "desativado",
+
+      encontrado:
+        false,
+
+      desativado:
+        true,
+
+      participante,
+
+      mensagem:
+        "Este advogado já está cadastrado, mas está desativado.",
+    };
+  }
+
+  return {
+    status:
+      "ativo",
+
+    encontrado:
+      true,
+
+    desativado:
+      false,
+
+    participante,
 
     mensagem:
       "Advogado localizado.",
@@ -226,7 +484,9 @@ export async function cadastrarAdvogado(
   oabNumeroInformado: string,
   oabUfInformada: string
 ): Promise<
-  ResultadoCadastro<AdvogadoParticipante>
+  ResultadoCadastro<
+    AdvogadoParticipante
+  >
 > {
   const {
     supabase,
@@ -261,37 +521,42 @@ export async function cadastrarAdvogado(
     );
   }
 
-  if (oabUf.length !== 2) {
+  if (
+    oabUf.length !== 2
+  ) {
     throw new Error(
       "Informe a UF da OAB."
     );
   }
 
-  /*
-    Primeiro consultamos novamente.
-
-    Além de melhorar a experiência,
-    isso evita criar um cadastro que
-    já passou a existir enquanto o
-    usuário preenchia o nome.
-  */
   const existente =
-    await buscarAdvogado(
+    await buscarAdvogadoNoBanco(
+      supabase,
+      empresaId,
       oabNumero,
       oabUf
     );
 
-  if (
-    existente.encontrado &&
-    existente.participante
-  ) {
+  if (existente) {
+    if (
+      !existente.ativo
+    ) {
+      throw new Error(
+        "Este advogado já está cadastrado, mas está desativado. Reative o cadastro existente para utilizá-lo."
+      );
+    }
+
     return {
-      sucesso: true,
+      sucesso:
+        true,
 
       participante:
-        existente.participante,
+        advogadoParticipante(
+          existente
+        ),
 
-      criado: false,
+      criado:
+        false,
 
       mensagem:
         "Este advogado já estava cadastrado e foi localizado.",
@@ -301,68 +566,76 @@ export async function cadastrarAdvogado(
   const {
     data,
     error,
-  } = await supabase
-    .from("correspondentes")
-    .insert({
-      empresa_id:
-        empresaId,
+  } =
+    await supabase
+      .from(
+        "correspondentes"
+      )
+      .insert({
+        empresa_id:
+          empresaId,
 
-      tipo:
-        "advogado",
+        tipo:
+          "advogado",
 
-      nome,
+        nome,
 
-      oab_numero:
-        oabNumero,
+        oab_numero:
+          oabNumero,
 
-      oab_uf:
-        oabUf,
+        oab_uf:
+          oabUf,
 
-      cpf:
-        null,
+        cpf:
+          null,
 
-      ativo:
-        true,
-    })
-    .select(`
-      id,
-      nome,
-      tipo,
-      oab_numero,
-      oab_uf
-    `)
-    .single();
+        ativo:
+          true,
+      })
+      .select(
+        `
+          id,
+          nome,
+          tipo,
+          oab_numero,
+          oab_uf,
+          ativo
+        `
+      )
+      .single();
 
-  /*
-    23505 = violação de índice UNIQUE.
-
-    Mesmo com a consulta anterior,
-    dois usuários podem tentar criar
-    a mesma OAB simultaneamente.
-
-    O banco continua sendo a última
-    barreira contra duplicidade.
-  */
   if (
-    error?.code === "23505"
+    error?.code ===
+    "23505"
   ) {
     const localizado =
-      await buscarAdvogado(
+      await buscarAdvogadoNoBanco(
+        supabase,
+        empresaId,
         oabNumero,
         oabUf
       );
 
-    if (
-      localizado.encontrado &&
-      localizado.participante
-    ) {
+    if (localizado) {
+      if (
+        !localizado.ativo
+      ) {
+        throw new Error(
+          "Este advogado já está cadastrado, mas está desativado. Reative o cadastro existente para utilizá-lo."
+        );
+      }
+
       return {
-        sucesso: true,
+        sucesso:
+          true,
 
         participante:
-          localizado.participante,
+          advogadoParticipante(
+            localizado
+          ),
 
-        criado: false,
+        criado:
+          false,
 
         mensagem:
           "O advogado já havia sido cadastrado e foi vinculado ao registro existente.",
@@ -370,7 +643,10 @@ export async function cadastrarAdvogado(
     }
   }
 
-  if (error || !data) {
+  if (
+    error ||
+    !data
+  ) {
     throw new Error(
       `Erro ao cadastrar advogado: ${
         error?.message ??
@@ -379,28 +655,195 @@ export async function cadastrarAdvogado(
     );
   }
 
+  atualizarPaginasCorrespondentes();
+
   return {
-    sucesso: true,
+    sucesso:
+      true,
 
     participante:
-      data as AdvogadoParticipante,
+      advogadoParticipante(
+        data as AdvogadoBanco
+      ),
 
-    criado: true,
+    criado:
+      true,
 
     mensagem:
       "Advogado cadastrado com sucesso.",
   };
 }
 
+export async function reativarAdvogado(
+  correspondenteId: string
+): Promise<
+  ResultadoReativacao<
+    AdvogadoParticipante
+  >
+> {
+  const {
+    supabase,
+    empresaId,
+  } =
+    await obterContextoUsuario();
+
+  if (
+    !correspondenteId
+  ) {
+    throw new Error(
+      "Não foi possível identificar o advogado."
+    );
+  }
+
+  const {
+    data:
+      existente,
+
+    error:
+      erroBusca,
+  } =
+    await supabase
+      .from(
+        "correspondentes"
+      )
+      .select(
+        `
+          id,
+          nome,
+          tipo,
+          oab_numero,
+          oab_uf,
+          ativo
+        `
+      )
+      .eq(
+        "id",
+        correspondenteId
+      )
+      .eq(
+        "empresa_id",
+        empresaId
+      )
+      .eq(
+        "tipo",
+        "advogado"
+      )
+      .is(
+        "excluido_em",
+        null
+      )
+      .maybeSingle();
+
+  if (erroBusca) {
+    throw new Error(
+      `Erro ao localizar advogado: ${erroBusca.message}`
+    );
+  }
+
+  if (!existente) {
+    throw new Error(
+      "O advogado não foi localizado nesta empresa."
+    );
+  }
+
+  const registro =
+    existente as AdvogadoBanco;
+
+  if (
+    registro.ativo
+  ) {
+    return {
+      sucesso:
+        true,
+
+      participante:
+        advogadoParticipante(
+          registro
+        ),
+
+      mensagem:
+        "O advogado já estava ativo e foi vinculado.",
+    };
+  }
+
+  const {
+    data,
+    error,
+  } =
+    await supabase
+      .from(
+        "correspondentes"
+      )
+      .update({
+        ativo:
+          true,
+      })
+      .eq(
+        "id",
+        correspondenteId
+      )
+      .eq(
+        "empresa_id",
+        empresaId
+      )
+      .eq(
+        "tipo",
+        "advogado"
+      )
+      .is(
+        "excluido_em",
+        null
+      )
+      .select(
+        `
+          id,
+          nome,
+          tipo,
+          oab_numero,
+          oab_uf,
+          ativo
+        `
+      )
+      .single();
+
+  if (
+    error ||
+    !data
+  ) {
+    throw new Error(
+      `Erro ao reativar advogado: ${
+        error?.message ??
+        "reativação não realizada"
+      }`
+    );
+  }
+
+  atualizarPaginasCorrespondentes();
+
+  return {
+    sucesso:
+      true,
+
+    participante:
+      advogadoParticipante(
+        data as AdvogadoBanco
+      ),
+
+    mensagem:
+      "Advogado reativado e vinculado com sucesso.",
+  };
+}
+
 /* =========================================================
    PREPOSTO
-   IDENTIFICAÇÃO: CPF
 ========================================================= */
 
 export async function buscarPreposto(
   cpfInformado: string
 ): Promise<
-  ResultadoBusca<PrepostoParticipante>
+  ResultadoBusca<
+    PrepostoParticipante
+  >
 > {
   const {
     supabase,
@@ -414,67 +857,77 @@ export async function buscarPreposto(
     );
 
   if (
-    !validarCPFBasico(cpf)
+    !validarCPFBasico(
+      cpf
+    )
   ) {
     throw new Error(
       "Informe um CPF com 11 números."
     );
   }
 
-  const {
-    data,
-    error,
-  } = await supabase
-    .from("correspondentes")
-    .select(`
-      id,
-      nome,
-      tipo,
+  const registro =
+    await buscarPrepostoNoBanco(
+      supabase,
+      empresaId,
       cpf
-    `)
-    .eq(
-      "empresa_id",
-      empresaId
-    )
-    .eq(
-      "tipo",
-      "preposto"
-    )
-    .eq(
-      "cpf",
-      cpf
-    )
-    .eq(
-      "ativo",
-      true
-    )
-    .is(
-      "excluido_em",
-      null
-    )
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(
-      `Erro ao buscar preposto: ${error.message}`
     );
-  }
 
-  if (!data) {
+  if (!registro) {
     return {
-      encontrado: false,
-      participante: null,
+      status:
+        "nao_encontrado",
+
+      encontrado:
+        false,
+
+      desativado:
+        false,
+
+      participante:
+        null,
 
       mensagem:
         "Nenhum preposto cadastrado com este CPF.",
     };
   }
 
-  return {
-    encontrado: true,
+  const participante =
+    prepostoParticipante(
+      registro
+    );
 
-    participante:
-      data as PrepostoParticipante,
+  if (
+    !registro.ativo
+  ) {
+    return {
+      status:
+        "desativado",
+
+      encontrado:
+        false,
+
+      desativado:
+        true,
+
+      participante,
+
+      mensagem:
+        "Este preposto já está cadastrado, mas está desativado.",
+    };
+  }
+
+  return {
+    status:
+      "ativo",
+
+    encontrado:
+      true,
+
+    desativado:
+      false,
+
+    participante,
 
     mensagem:
       "Preposto localizado.",
@@ -485,7 +938,9 @@ export async function cadastrarPreposto(
   nomeInformado: string,
   cpfInformado: string
 ): Promise<
-  ResultadoCadastro<PrepostoParticipante>
+  ResultadoCadastro<
+    PrepostoParticipante
+  >
 > {
   const {
     supabase,
@@ -510,7 +965,9 @@ export async function cadastrarPreposto(
   }
 
   if (
-    !validarCPFBasico(cpf)
+    !validarCPFBasico(
+      cpf
+    )
   ) {
     throw new Error(
       "Informe um CPF com 11 números."
@@ -518,21 +975,32 @@ export async function cadastrarPreposto(
   }
 
   const existente =
-    await buscarPreposto(
+    await buscarPrepostoNoBanco(
+      supabase,
+      empresaId,
       cpf
     );
 
-  if (
-    existente.encontrado &&
-    existente.participante
-  ) {
+  if (existente) {
+    if (
+      !existente.ativo
+    ) {
+      throw new Error(
+        "Este preposto já está cadastrado, mas está desativado. Reative o cadastro existente para utilizá-lo."
+      );
+    }
+
     return {
-      sucesso: true,
+      sucesso:
+        true,
 
       participante:
-        existente.participante,
+        prepostoParticipante(
+          existente
+        ),
 
-      criado: false,
+      criado:
+        false,
 
       mensagem:
         "Este preposto já estava cadastrado e foi localizado.",
@@ -542,55 +1010,73 @@ export async function cadastrarPreposto(
   const {
     data,
     error,
-  } = await supabase
-    .from("correspondentes")
-    .insert({
-      empresa_id:
-        empresaId,
+  } =
+    await supabase
+      .from(
+        "correspondentes"
+      )
+      .insert({
+        empresa_id:
+          empresaId,
 
-      tipo:
-        "preposto",
+        tipo:
+          "preposto",
 
-      nome,
+        nome,
 
-      cpf,
+        cpf,
 
-      oab_numero:
-        null,
+        oab_numero:
+          null,
 
-      oab_uf:
-        null,
+        oab_uf:
+          null,
 
-      ativo:
-        true,
-    })
-    .select(`
-      id,
-      nome,
-      tipo,
-      cpf
-    `)
-    .single();
+        ativo:
+          true,
+      })
+      .select(
+        `
+          id,
+          nome,
+          tipo,
+          cpf,
+          ativo
+        `
+      )
+      .single();
 
   if (
-    error?.code === "23505"
+    error?.code ===
+    "23505"
   ) {
     const localizado =
-      await buscarPreposto(
+      await buscarPrepostoNoBanco(
+        supabase,
+        empresaId,
         cpf
       );
 
-    if (
-      localizado.encontrado &&
-      localizado.participante
-    ) {
+    if (localizado) {
+      if (
+        !localizado.ativo
+      ) {
+        throw new Error(
+          "Este preposto já está cadastrado, mas está desativado. Reative o cadastro existente para utilizá-lo."
+        );
+      }
+
       return {
-        sucesso: true,
+        sucesso:
+          true,
 
         participante:
-          localizado.participante,
+          prepostoParticipante(
+            localizado
+          ),
 
-        criado: false,
+        criado:
+          false,
 
         mensagem:
           "O preposto já havia sido cadastrado e foi vinculado ao registro existente.",
@@ -598,7 +1084,10 @@ export async function cadastrarPreposto(
     }
   }
 
-  if (error || !data) {
+  if (
+    error ||
+    !data
+  ) {
     throw new Error(
       `Erro ao cadastrar preposto: ${
         error?.message ??
@@ -607,28 +1096,193 @@ export async function cadastrarPreposto(
     );
   }
 
+  atualizarPaginasCorrespondentes();
+
   return {
-    sucesso: true,
+    sucesso:
+      true,
 
     participante:
-      data as PrepostoParticipante,
+      prepostoParticipante(
+        data as PrepostoBanco
+      ),
 
-    criado: true,
+    criado:
+      true,
 
     mensagem:
       "Preposto cadastrado com sucesso.",
   };
 }
 
+export async function reativarPreposto(
+  correspondenteId: string
+): Promise<
+  ResultadoReativacao<
+    PrepostoParticipante
+  >
+> {
+  const {
+    supabase,
+    empresaId,
+  } =
+    await obterContextoUsuario();
+
+  if (
+    !correspondenteId
+  ) {
+    throw new Error(
+      "Não foi possível identificar o preposto."
+    );
+  }
+
+  const {
+    data:
+      existente,
+
+    error:
+      erroBusca,
+  } =
+    await supabase
+      .from(
+        "correspondentes"
+      )
+      .select(
+        `
+          id,
+          nome,
+          tipo,
+          cpf,
+          ativo
+        `
+      )
+      .eq(
+        "id",
+        correspondenteId
+      )
+      .eq(
+        "empresa_id",
+        empresaId
+      )
+      .eq(
+        "tipo",
+        "preposto"
+      )
+      .is(
+        "excluido_em",
+        null
+      )
+      .maybeSingle();
+
+  if (erroBusca) {
+    throw new Error(
+      `Erro ao localizar preposto: ${erroBusca.message}`
+    );
+  }
+
+  if (!existente) {
+    throw new Error(
+      "O preposto não foi localizado nesta empresa."
+    );
+  }
+
+  const registro =
+    existente as PrepostoBanco;
+
+  if (
+    registro.ativo
+  ) {
+    return {
+      sucesso:
+        true,
+
+      participante:
+        prepostoParticipante(
+          registro
+        ),
+
+      mensagem:
+        "O preposto já estava ativo e foi vinculado.",
+    };
+  }
+
+  const {
+    data,
+    error,
+  } =
+    await supabase
+      .from(
+        "correspondentes"
+      )
+      .update({
+        ativo:
+          true,
+      })
+      .eq(
+        "id",
+        correspondenteId
+      )
+      .eq(
+        "empresa_id",
+        empresaId
+      )
+      .eq(
+        "tipo",
+        "preposto"
+      )
+      .is(
+        "excluido_em",
+        null
+      )
+      .select(
+        `
+          id,
+          nome,
+          tipo,
+          cpf,
+          ativo
+        `
+      )
+      .single();
+
+  if (
+    error ||
+    !data
+  ) {
+    throw new Error(
+      `Erro ao reativar preposto: ${
+        error?.message ??
+        "reativação não realizada"
+      }`
+    );
+  }
+
+  atualizarPaginasCorrespondentes();
+
+  return {
+    sucesso:
+      true,
+
+    participante:
+      prepostoParticipante(
+        data as PrepostoBanco
+      ),
+
+    mensagem:
+      "Preposto reativado e vinculado com sucesso.",
+  };
+}
+
 /* =========================================================
    TESTEMUNHA
-   IDENTIFICAÇÃO: CPF
 ========================================================= */
 
 export async function buscarTestemunha(
   cpfInformado: string
 ): Promise<
-  ResultadoBusca<TestemunhaParticipante>
+  ResultadoBusca<
+    TestemunhaParticipante
+  >
 > {
   const {
     supabase,
@@ -642,7 +1296,9 @@ export async function buscarTestemunha(
     );
 
   if (
-    !validarCPFBasico(cpf)
+    !validarCPFBasico(
+      cpf
+    )
   ) {
     throw new Error(
       "Informe um CPF com 11 números."
@@ -652,30 +1308,35 @@ export async function buscarTestemunha(
   const {
     data,
     error,
-  } = await supabase
-    .from("testemunhas")
-    .select(`
-      id,
-      nome,
-      cpf
-    `)
-    .eq(
-      "empresa_id",
-      empresaId
-    )
-    .eq(
-      "cpf",
-      cpf
-    )
-    .eq(
-      "ativo",
-      true
-    )
-    .is(
-      "excluida_em",
-      null
-    )
-    .maybeSingle();
+  } =
+    await supabase
+      .from(
+        "testemunhas"
+      )
+      .select(
+        `
+          id,
+          nome,
+          cpf
+        `
+      )
+      .eq(
+        "empresa_id",
+        empresaId
+      )
+      .eq(
+        "cpf",
+        cpf
+      )
+      .eq(
+        "ativo",
+        true
+      )
+      .is(
+        "excluida_em",
+        null
+      )
+      .maybeSingle();
 
   if (error) {
     throw new Error(
@@ -685,8 +1346,17 @@ export async function buscarTestemunha(
 
   if (!data) {
     return {
-      encontrado: false,
-      participante: null,
+      status:
+        "nao_encontrado",
+
+      encontrado:
+        false,
+
+      desativado:
+        false,
+
+      participante:
+        null,
 
       mensagem:
         "Nenhuma testemunha cadastrada com este CPF.",
@@ -694,10 +1364,33 @@ export async function buscarTestemunha(
   }
 
   return {
-    encontrado: true,
+    status:
+      "ativo",
 
-    participante:
-      data as TestemunhaParticipante,
+    encontrado:
+      true,
+
+    desativado:
+      false,
+
+    participante: {
+      id:
+        String(
+          data.id
+        ),
+
+      nome:
+        String(
+          data.nome ??
+          ""
+        ),
+
+      cpf:
+        String(
+          data.cpf ??
+          ""
+        ),
+    },
 
     mensagem:
       "Testemunha localizada.",
@@ -708,7 +1401,9 @@ export async function cadastrarTestemunha(
   nomeInformado: string,
   cpfInformado: string
 ): Promise<
-  ResultadoCadastro<TestemunhaParticipante>
+  ResultadoCadastro<
+    TestemunhaParticipante
+  >
 > {
   const {
     supabase,
@@ -733,7 +1428,9 @@ export async function cadastrarTestemunha(
   }
 
   if (
-    !validarCPFBasico(cpf)
+    !validarCPFBasico(
+      cpf
+    )
   ) {
     throw new Error(
       "Informe um CPF com 11 números."
@@ -746,16 +1443,19 @@ export async function cadastrarTestemunha(
     );
 
   if (
-    existente.encontrado &&
+    existente.status ===
+      "ativo" &&
     existente.participante
   ) {
     return {
-      sucesso: true,
+      sucesso:
+        true,
 
       participante:
         existente.participante,
 
-      criado: false,
+      criado:
+        false,
 
       mensagem:
         "Esta testemunha já estava cadastrada e foi localizada.",
@@ -765,28 +1465,34 @@ export async function cadastrarTestemunha(
   const {
     data,
     error,
-  } = await supabase
-    .from("testemunhas")
-    .insert({
-      empresa_id:
-        empresaId,
+  } =
+    await supabase
+      .from(
+        "testemunhas"
+      )
+      .insert({
+        empresa_id:
+          empresaId,
 
-      nome,
+        nome,
 
-      cpf,
+        cpf,
 
-      ativo:
-        true,
-    })
-    .select(`
-      id,
-      nome,
-      cpf
-    `)
-    .single();
+        ativo:
+          true,
+      })
+      .select(
+        `
+          id,
+          nome,
+          cpf
+        `
+      )
+      .single();
 
   if (
-    error?.code === "23505"
+    error?.code ===
+    "23505"
   ) {
     const localizada =
       await buscarTestemunha(
@@ -794,16 +1500,19 @@ export async function cadastrarTestemunha(
       );
 
     if (
-      localizada.encontrado &&
+      localizada.status ===
+        "ativo" &&
       localizada.participante
     ) {
       return {
-        sucesso: true,
+        sucesso:
+          true,
 
         participante:
           localizada.participante,
 
-        criado: false,
+        criado:
+          false,
 
         mensagem:
           "A testemunha já havia sido cadastrada e foi vinculada ao registro existente.",
@@ -811,7 +1520,10 @@ export async function cadastrarTestemunha(
     }
   }
 
-  if (error || !data) {
+  if (
+    error ||
+    !data
+  ) {
     throw new Error(
       `Erro ao cadastrar testemunha: ${
         error?.message ??
@@ -821,12 +1533,30 @@ export async function cadastrarTestemunha(
   }
 
   return {
-    sucesso: true,
+    sucesso:
+      true,
 
-    participante:
-      data as TestemunhaParticipante,
+    participante: {
+      id:
+        String(
+          data.id
+        ),
 
-    criado: true,
+      nome:
+        String(
+          data.nome ??
+          ""
+        ),
+
+      cpf:
+        String(
+          data.cpf ??
+          ""
+        ),
+    },
+
+    criado:
+      true,
 
     mensagem:
       "Testemunha cadastrada com sucesso.",

@@ -941,10 +941,7 @@ const [
     state.valores?.necessita_preposto ??
     null
   }
-  testemunhasStatusInicial={
-    state.valores?.testemunhas_status ??
-    null
-  }
+ 
   testemunhasConfirmadasInicial={
     state.valores?.testemunhas_confirmadas ??
     null

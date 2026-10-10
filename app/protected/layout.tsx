@@ -15,7 +15,6 @@ import {
   createClient,
 } from "@/lib/supabase/server";
 
-export const instant = false;
 
 export default async function ProtectedLayout({
   children,

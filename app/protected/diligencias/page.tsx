@@ -5,22 +5,20 @@ import {
 } from "next/navigation";
 
 import {
+  CalendarDays,
+  Clock3,
+  FileText,
+  Plus,
+  Search,
+} from "lucide-react";
+
+import {
   createClient,
 } from "@/lib/supabase/server";
 
 import {
-  ControlePagamento,
-} from "./controle-pagamento";
-
-import {
-  CalendarDays,
-  CheckCircle2,
-  CircleAlert,
-  Clock3,
-  DollarSign,
-  FileText,
-  Plus,
-} from "lucide-react";
+  temPermissao,
+} from "@/lib/permissoes";
 
 
 /* =====================================================
@@ -32,6 +30,7 @@ type DiligenciaLista = {
 
   tipo_diligencia:
     string;
+    
 
   numero_processo:
     string | null;
@@ -81,82 +80,10 @@ type DiligenciaLista = {
 
   orientacoes_encaminhadas:
     boolean | null;
-
-  resultado_diligencia:
-    string | null;
-
-  financeiro_status:
-    string | null;
-
-  desfecho_em:
-    string | null;
 };
 
 
-type ContratacaoFinanceira = {
-  id:
-    string;
-
-  diligencia_id:
-    string;
-
-  tipo_profissional:
-    string;
-
-  correspondente_id:
-    string;
-
-  valor:
-    string | number;
-
-  pagamento_combinado_em:
-    string | null;
-
-  pagamento_devido:
-    boolean | null;
-
-  pagamento_decidido_em:
-    string | null;
-
-  pago_em:
-    string | null;
-};
-
-
-type Profissional = {
-  id:
-    string;
-
-  nome:
-    string;
-
-  tipo:
-    string;
-
-  oab_numero:
-    string | null;
-
-  oab_uf:
-    string | null;
-
-  cpf:
-    string | null;
-};
-
-
-type MembroEmpresa = {
-  empresa_id:
-    string;
-
-  papel:
-    string;
-
-  nucleo:
-    string | null;
-};
-
-
-type FiltroDiligencias =
+type FiltroOperacional =
   | "hoje"
   | "proximos_15_dias"
   | "fila_operacional"
@@ -164,11 +91,7 @@ type FiltroDiligencias =
   | "sem_orientacoes"
   | "preposto_pendente"
   | "definicoes_pendentes"
-  | "conflito_agenda"
-  | "com_desfecho"
-  | "sem_desfecho"
-  | "pagamento_pendente"
-  | "pagamento_realizado";
+  | "conflito_agenda";
 
 
 type SearchParamsDiligencias = {
@@ -178,25 +101,15 @@ type SearchParamsDiligencias = {
 };
 
 
-type AgoraLocal = {
-  data:
-    string;
-
-  horario:
-    string;
-};
-
-
 /* =====================================================
    NOMES DOS FILTROS
 ===================================================== */
 
 const nomesFiltros:
   Record<
-    FiltroDiligencias,
+    FiltroOperacional,
     string
   > = {
-
   hoje:
     "Diligências hoje",
 
@@ -220,32 +133,19 @@ const nomesFiltros:
 
   conflito_agenda:
     "Possíveis conflitos",
-
-  com_desfecho:
-    "Com desfecho",
-
-  sem_desfecho:
-    "Sem desfecho",
-
-  pagamento_pendente:
-    "Pagamentos pendentes",
-
-  pagamento_realizado:
-    "Pagamentos realizados",
 };
 
 
 /* =====================================================
-   FILTROS
+   VALIDAÇÃO DO FILTRO
 ===================================================== */
 
-function ehFiltroDiligencias(
+function ehFiltroOperacional(
   valor:
     | string
     | null
     | undefined
-): valor is FiltroDiligencias {
-
+): valor is FiltroOperacional {
   return (
     valor ===
       "hoje" ||
@@ -269,45 +169,16 @@ function ehFiltroDiligencias(
       "definicoes_pendentes" ||
 
     valor ===
-      "conflito_agenda" ||
-
-    valor ===
-      "com_desfecho" ||
-
-    valor ===
-      "sem_desfecho" ||
-
-    valor ===
-      "pagamento_pendente" ||
-
-    valor ===
-      "pagamento_realizado"
-  );
-}
-
-
-function ehFiltroFinanceiro(
-  filtro:
-    FiltroDiligencias | null
-) {
-
-  return (
-    filtro ===
-      "pagamento_pendente" ||
-
-    filtro ===
-      "pagamento_realizado"
+      "conflito_agenda"
   );
 }
 
 
 /* =====================================================
-   DATA / HORA RECIFE
+   DATA ATUAL EM RECIFE
 ===================================================== */
 
-function agoraEmRecife():
-  AgoraLocal {
-
+function hojeEmRecife() {
   const partes =
     new Intl.DateTimeFormat(
       "en-CA",
@@ -323,51 +194,33 @@ function agoraEmRecife():
 
         day:
           "2-digit",
-
-        hour:
-          "2-digit",
-
-        minute:
-          "2-digit",
-
-        hourCycle:
-          "h23",
       }
     ).formatToParts(
       new Date()
     );
 
+  const ano =
+    partes.find(
+      (parte) =>
+        parte.type ===
+        "year"
+    )?.value;
 
-  const obter =
-    (
-      tipo:
-        Intl.DateTimeFormatPartTypes
-    ) =>
-      partes.find(
-        (parte) =>
-          parte.type ===
-          tipo
-      )?.value ?? "";
-
-
-  return {
-    data:
-      `${obter("year")}-${obter(
+  const mes =
+    partes.find(
+      (parte) =>
+        parte.type ===
         "month"
-      )}-${obter("day")}`,
+    )?.value;
 
-    horario:
-      `${obter("hour")}:${obter(
-        "minute"
-      )}`,
-  };
-}
+  const dia =
+    partes.find(
+      (parte) =>
+        parte.type ===
+        "day"
+    )?.value;
 
-
-function hojeEmRecife() {
-
-  return agoraEmRecife()
-    .data;
+  return `${ano}-${mes}-${dia}`;
 }
 
 
@@ -382,7 +235,6 @@ function somarDiasISO(
   dias:
     number
 ) {
-
   const [
     ano,
     mes,
@@ -390,8 +242,9 @@ function somarDiasISO(
   ] =
     dataISO
       .split("-")
-      .map(Number);
-
+      .map(
+        Number
+      );
 
   const data =
     new Date(
@@ -402,12 +255,10 @@ function somarDiasISO(
       )
     );
 
-
   data.setUTCDate(
     data.getUTCDate() +
       dias
   );
-
 
   return data
     .toISOString()
@@ -426,7 +277,6 @@ function minutosDoHorario(
   horario:
     string
 ) {
-
   const [
     hora,
     minuto,
@@ -437,8 +287,9 @@ function minutosDoHorario(
         5
       )
       .split(":")
-      .map(Number);
-
+      .map(
+        Number
+      );
 
   return (
     (
@@ -461,60 +312,18 @@ function minutosDoHorario(
 
 
 /* =====================================================
-   ATO JÁ TRANSCORREU
-===================================================== */
-
-function atoJaTranscorreu(
-  diligencia:
-    DiligenciaLista,
-
-  agora:
-    AgoraLocal
-) {
-
-  if (
-    diligencia
-      .data_diligencia <
-    agora.data
-  ) {
-    return true;
-  }
-
-
-  if (
-    diligencia
-      .data_diligencia >
-    agora.data
-  ) {
-    return false;
-  }
-
-
-  return (
-    diligencia
-      .horario
-      .slice(
-        0,
-        5
-      ) <=
-    agora.horario
-  );
-}
-
-
-/* =====================================================
-   FORMATAÇÕES
+   FORMATAÇÃO DO PROCESSO
 ===================================================== */
 
 function formatarProcesso(
   processo:
     string | null
 ) {
-
-  if (!processo) {
+  if (
+    !processo
+  ) {
     return "PROCESSO NÃO INFORMADO";
   }
-
 
   const numeros =
     processo.replace(
@@ -522,14 +331,12 @@ function formatarProcesso(
       ""
     );
 
-
   if (
     numeros.length !==
     20
   ) {
     return processo;
   }
-
 
   return (
     `${numeros.slice(0, 7)}-` +
@@ -542,170 +349,6 @@ function formatarProcesso(
 }
 
 
-function formatarData(
-  data:
-    string | null
-) {
-
-  if (!data) {
-    return "Não informada";
-  }
-
-
-  const partes =
-    data
-      .slice(
-        0,
-        10
-      )
-      .split("-");
-
-
-  if (
-    partes.length !==
-    3
-  ) {
-    return data;
-  }
-
-
-  return `${partes[2]}/${partes[1]}/${partes[0]}`;
-}
-
-
-function formatarMoeda(
-  valor:
-    string | number
-) {
-
-  const numero =
-    typeof valor ===
-      "number"
-      ? valor
-      : Number(valor);
-
-
-  return new Intl.NumberFormat(
-    "pt-BR",
-    {
-      style:
-        "currency",
-
-      currency:
-        "BRL",
-    }
-  ).format(
-    Number.isFinite(
-      numero
-    )
-      ? numero
-      : 0
-  );
-}
-
-
-function formatarCpf(
-  cpf:
-    string | null
-) {
-
-  if (!cpf) {
-    return null;
-  }
-
-
-  const numeros =
-    cpf.replace(
-      /\D/g,
-      ""
-    );
-
-
-  if (
-    numeros.length !==
-    11
-  ) {
-    return cpf;
-  }
-
-
-  return (
-    `***.${numeros.slice(3, 6)}.` +
-    `${numeros.slice(6, 9)}-**`
-  );
-}
-
-
-function identificacaoProfissional(
-  profissional:
-    Profissional | undefined,
-
-  tipo:
-    string
-) {
-
-  if (!profissional) {
-    return null;
-  }
-
-
-  if (
-    tipo ===
-      "advogado" &&
-    profissional
-      .oab_numero
-  ) {
-    return (
-      `OAB/${profissional.oab_uf ?? ""} ` +
-      profissional.oab_numero
-    ).trim();
-  }
-
-
-  if (
-    tipo ===
-    "preposto"
-  ) {
-    const cpf =
-      formatarCpf(
-        profissional.cpf
-      );
-
-    return cpf
-      ? `CPF ${cpf}`
-      : null;
-  }
-
-
-  return null;
-}
-
-
-function textoResultado(
-  resultado:
-    string | null
-) {
-
-  if (
-    resultado ===
-    "finalidade_atingida"
-  ) {
-    return "Finalidade atingida";
-  }
-
-
-  if (
-    resultado ===
-    "finalidade_nao_atingida"
-  ) {
-    return "Finalidade não atingida";
-  }
-
-
-  return null;
-}
-
-
 /* =====================================================
    PENDÊNCIAS
 ===================================================== */
@@ -714,7 +357,6 @@ function temPendencia(
   diligencia:
     DiligenciaLista
 ) {
-
   return (
     !diligencia
       .correspondente_id ||
@@ -747,26 +389,27 @@ function temPendencia(
 
 
 /* =====================================================
-   CONFLITOS DE AGENDA
+   DILIGÊNCIAS COM CONFLITO
+
+   Mesmo participante
+   + mesmo dia
+   + intervalo inferior a 5 horas.
 ===================================================== */
 
 function idsDiligenciasComConflito(
   diligencias:
     DiligenciaLista[]
 ) {
-
   const agendaPorParticipante =
     new Map<
       string,
       DiligenciaLista[]
     >();
 
-
   for (
     const diligencia of
     diligencias
   ) {
-
     const participantes =
       [
         diligencia
@@ -778,29 +421,26 @@ function idsDiligenciasComConflito(
         (
           id
         ): id is string =>
-          Boolean(id)
+          Boolean(
+            id
+          )
       );
-
 
     for (
       const participanteId of
       participantes
     ) {
-
       const chave =
         `${participanteId}:${diligencia.data_diligencia}`;
-
 
       const lista =
         agendaPorParticipante.get(
           chave
         ) ?? [];
 
-
       lista.push(
         diligencia
       );
-
 
       agendaPorParticipante.set(
         chave,
@@ -809,16 +449,13 @@ function idsDiligenciasComConflito(
     }
   }
 
-
   const ids =
     new Set<string>();
-
 
   for (
     const agenda of
     agendaPorParticipante.values()
   ) {
-
     const ordenada =
       [
         ...agenda,
@@ -835,22 +472,21 @@ function idsDiligenciasComConflito(
           )
       );
 
-
     for (
       let i = 0;
       i <
       ordenada.length;
       i += 1
     ) {
-
       for (
         let j =
           i + 1;
+
         j <
         ordenada.length;
+
         j += 1
       ) {
-
         const diferenca =
           Math.abs(
             minutosDoHorario(
@@ -863,7 +499,6 @@ function idsDiligenciasComConflito(
               )
           );
 
-
         if (
           diferenca >=
           300
@@ -871,11 +506,9 @@ function idsDiligenciasComConflito(
           break;
         }
 
-
         ids.add(
           ordenada[i].id
         );
-
 
         ids.add(
           ordenada[j].id
@@ -884,13 +517,12 @@ function idsDiligenciasComConflito(
     }
   }
 
-
   return ids;
 }
 
 
 /* =====================================================
-   FILTROS SOBRE DILIGÊNCIAS
+   APLICAÇÃO DO FILTRO
 ===================================================== */
 
 function aplicarFiltro(
@@ -898,16 +530,10 @@ function aplicarFiltro(
     DiligenciaLista[],
 
   filtro:
-    FiltroDiligencias
+    FiltroOperacional
 ) {
-
-  const agora =
-    agoraEmRecife();
-
-
   const hoje =
-    agora.data;
-
+    hojeEmRecife();
 
   const amanha =
     somarDiasISO(
@@ -915,84 +541,19 @@ function aplicarFiltro(
       1
     );
 
-
   const limite15Dias =
     somarDiasISO(
       hoje,
       15
     );
 
-
-  /* ===================================================
-     DESFECHO
-
-     Não usamos a janela de 15 dias.
-  =================================================== */
-
-  if (
-    filtro ===
-    "com_desfecho"
-  ) {
-    return diligencias.filter(
-      (
-        diligencia
-      ) =>
-        Boolean(
-          diligencia
-            .desfecho_em
-        )
-    );
-  }
-
-
-  if (
-    filtro ===
-    "sem_desfecho"
-  ) {
-    return diligencias.filter(
-      (
-        diligencia
-      ) =>
-        diligencia.status ===
-          "ativa" &&
-
-        !diligencia
-          .desfecho_em &&
-
-        atoJaTranscorreu(
-          diligencia,
-          agora
-        )
-    );
-  }
-
-
-  /* ===================================================
-     FILTROS FINANCEIROS
-
-     São processados separadamente por contratação.
-  =================================================== */
-
-  if (
-    filtro ===
-      "pagamento_pendente" ||
-    filtro ===
-      "pagamento_realizado"
-  ) {
-    return [];
-  }
-
-
-  /* ===================================================
-     JANELA OPERACIONAL DO DASHBOARD
-  =================================================== */
-
   const janelaOperacional =
     diligencias.filter(
       (
         diligencia
       ) =>
-        diligencia.status !==
+        diligencia
+          .status !==
           "cancelada" &&
 
         diligencia
@@ -1004,6 +565,8 @@ function aplicarFiltro(
           limite15Dias
     );
 
+
+  /* HOJE */
 
   if (
     filtro ===
@@ -1020,6 +583,8 @@ function aplicarFiltro(
   }
 
 
+  /* PRÓXIMOS 15 DIAS */
+
   if (
     filtro ===
     "proximos_15_dias"
@@ -1034,6 +599,8 @@ function aplicarFiltro(
     );
   }
 
+
+  /* FILA OPERACIONAL */
 
   if (
     filtro ===
@@ -1050,6 +617,8 @@ function aplicarFiltro(
   }
 
 
+  /* SEM CORRESPONDENTE */
+
   if (
     filtro ===
     "sem_correspondente"
@@ -1063,6 +632,8 @@ function aplicarFiltro(
     );
   }
 
+
+  /* SEM ORIENTAÇÕES */
 
   if (
     filtro ===
@@ -1079,6 +650,8 @@ function aplicarFiltro(
   }
 
 
+  /* PREPOSTO PENDENTE */
+
   if (
     filtro ===
     "preposto_pendente"
@@ -1090,12 +663,13 @@ function aplicarFiltro(
         diligencia
           .necessita_preposto ===
           true &&
-
         !diligencia
           .preposto_id
     );
   }
 
+
+  /* DEFINIÇÕES PENDENTES */
 
   if (
     filtro ===
@@ -1126,11 +700,12 @@ function aplicarFiltro(
   }
 
 
+  /* CONFLITOS */
+
   const idsConflitos =
     idsDiligenciasComConflito(
       janelaOperacional
     );
-
 
   return janelaOperacional.filter(
     (
@@ -1155,42 +730,35 @@ export default async function DiligenciasPage({
 }) {
 
   /* ===================================================
-     FILTRO
+     FILTRO DA URL
   =================================================== */
 
   const parametros =
     await searchParams;
 
-
   const filtroRecebido =
     Array.isArray(
       parametros.filtro
     )
-      ? parametros.filtro[0]
-      : parametros.filtro;
-
+      ? parametros
+          .filtro[0]
+      : parametros
+          .filtro;
 
   const filtroAtivo =
-    ehFiltroDiligencias(
+    ehFiltroOperacional(
       filtroRecebido
     )
       ? filtroRecebido
       : null;
 
 
-  const filtroFinanceiro =
-    ehFiltroFinanceiro(
-      filtroAtivo
-    );
-
-
   /* ===================================================
-     SUPABASE / AUTENTICAÇÃO
+     SUPABASE
   =================================================== */
 
   const supabase =
     await createClient();
-
 
   const {
     data:
@@ -1203,7 +771,6 @@ export default async function DiligenciasPage({
       .auth
       .getClaims();
 
-
   if (
     authError ||
     !authData
@@ -1215,7 +782,6 @@ export default async function DiligenciasPage({
     );
   }
 
-
   const usuarioId =
     authData
       .claims
@@ -1223,12 +789,28 @@ export default async function DiligenciasPage({
 
 
   /* ===================================================
-     EMPRESA / PERFIL
+     PERMISSÕES DE INTERFACE
+
+     Master e Operacional:
+     podem criar.
+
+     Financeiro:
+     apenas consulta.
+  =================================================== */
+
+  const podeCriar =
+    await temPermissao(
+      "diligencias.criar"
+    );
+
+
+  /* ===================================================
+     EMPRESA
   =================================================== */
 
   const {
     data:
-      membroConsulta,
+      membro,
 
     error:
       erroMembro,
@@ -1238,7 +820,7 @@ export default async function DiligenciasPage({
         "membros_empresa"
       )
       .select(
-        "empresa_id, papel, nucleo"
+        "empresa_id"
       )
       .eq(
         "usuario_id",
@@ -1250,7 +832,6 @@ export default async function DiligenciasPage({
       )
       .maybeSingle();
 
-
   if (
     erroMembro
   ) {
@@ -1259,9 +840,8 @@ export default async function DiligenciasPage({
     );
   }
 
-
   if (
-    !membroConsulta
+    !membro
   ) {
     return (
       <div>
@@ -1277,25 +857,8 @@ export default async function DiligenciasPage({
   }
 
 
-  const membro =
-    membroConsulta as
-      MembroEmpresa;
-
-
-  const empresaId =
-    membro
-      .empresa_id;
-
-
-  const podeGerenciarPagamento =
-    membro.papel ===
-      "master" ||
-    membro.nucleo ===
-      "financeiro";
-
-
   /* ===================================================
-     DILIGÊNCIAS
+     CONSULTA
   =================================================== */
 
   const {
@@ -1326,14 +889,11 @@ export default async function DiligenciasPage({
         preposto_id,
         testemunhas_status,
         contratacao_status,
-        orientacoes_encaminhadas,
-        resultado_diligencia,
-        financeiro_status,
-        desfecho_em
+        orientacoes_encaminhadas
       `)
       .eq(
         "empresa_id",
-        empresaId
+        membro.empresa_id
       )
       .is(
         "excluida_em",
@@ -1354,7 +914,6 @@ export default async function DiligenciasPage({
         }
       );
 
-
   if (
     erroDiligencias
   ) {
@@ -1363,193 +922,15 @@ export default async function DiligenciasPage({
     );
   }
 
-
   const todasDiligencias =
     (
       diligenciasConsultadas ??
       []
-    ) as
-      DiligenciaLista[];
-
-
-  const idsDiligencias =
-    todasDiligencias.map(
-      (
-        diligencia
-      ) =>
-        diligencia.id
-    );
+    ) as DiligenciaLista[];
 
 
   /* ===================================================
-     CONTRATAÇÕES FINANCEIRAS
-  =================================================== */
-
-  let contratacoes:
-    ContratacaoFinanceira[] =
-    [];
-
-
-  if (
-    idsDiligencias.length >
-    0
-  ) {
-
-    const {
-      data:
-        contratacoesConsultadas,
-
-      error:
-        erroContratacoes,
-    } =
-      await supabase
-        .from(
-          "diligencias_contratacoes"
-        )
-        .select(`
-          id,
-          diligencia_id,
-          tipo_profissional,
-          correspondente_id,
-          valor,
-          pagamento_combinado_em,
-          pagamento_devido,
-          pagamento_decidido_em,
-          pago_em
-        `)
-        .eq(
-          "empresa_id",
-          empresaId
-        )
-        .in(
-          "diligencia_id",
-          idsDiligencias
-        );
-
-
-    if (
-      erroContratacoes
-    ) {
-      throw new Error(
-        `Erro ao carregar contratações: ${erroContratacoes.message}`
-      );
-    }
-
-
-    contratacoes =
-      (
-        contratacoesConsultadas ??
-        []
-      ) as
-        ContratacaoFinanceira[];
-  }
-
-
-  /* ===================================================
-     PROFISSIONAIS
-  =================================================== */
-
-  const idsProfissionais =
-    Array.from(
-      new Set(
-        contratacoes
-          .map(
-            (
-              contratacao
-            ) =>
-              contratacao
-                .correspondente_id
-          )
-          .filter(Boolean)
-      )
-    );
-
-
-  let profissionais:
-    Profissional[] =
-    [];
-
-
-  if (
-    idsProfissionais.length >
-    0
-  ) {
-
-    const {
-      data:
-        profissionaisConsultados,
-
-      error:
-        erroProfissionais,
-    } =
-      await supabase
-        .from(
-          "correspondentes"
-        )
-        .select(`
-          id,
-          nome,
-          tipo,
-          oab_numero,
-          oab_uf,
-          cpf
-        `)
-        .eq(
-          "empresa_id",
-          empresaId
-        )
-        .in(
-          "id",
-          idsProfissionais
-        );
-
-
-    if (
-      erroProfissionais
-    ) {
-      throw new Error(
-        `Erro ao carregar profissionais: ${erroProfissionais.message}`
-      );
-    }
-
-
-    profissionais =
-      (
-        profissionaisConsultados ??
-        []
-      ) as
-        Profissional[];
-  }
-
-
-  const diligenciaPorId =
-    new Map(
-      todasDiligencias.map(
-        (
-          diligencia
-        ) => [
-          diligencia.id,
-          diligencia,
-        ]
-      )
-    );
-
-
-  const profissionalPorId =
-    new Map(
-      profissionais.map(
-        (
-          profissional
-        ) => [
-          profissional.id,
-          profissional,
-        ]
-      )
-    );
-
-
-  /* ===================================================
-     LISTA NORMAL
+     DILIGÊNCIAS EXIBIDAS
   =================================================== */
 
   const diligenciasExibidas =
@@ -1560,86 +941,9 @@ export default async function DiligenciasPage({
         )
       : todasDiligencias;
 
-
-  /* ===================================================
-     LISTA FINANCEIRA
-
-     UMA CONTRATAÇÃO = UMA LINHA
-  =================================================== */
-
-  const contratacoesExibidas =
-    filtroAtivo ===
-      "pagamento_pendente"
-
-      ? contratacoes
-          .filter(
-            (
-              contratacao
-            ) =>
-              contratacao
-                .pagamento_devido ===
-                true &&
-
-              !contratacao
-                .pago_em
-          )
-          .sort(
-            (
-              a,
-              b
-            ) =>
-              (
-                a
-                  .pagamento_combinado_em ??
-                "9999-12-31"
-              ).localeCompare(
-                b
-                  .pagamento_combinado_em ??
-                  "9999-12-31"
-              )
-          )
-
-      : filtroAtivo ===
-          "pagamento_realizado"
-
-        ? contratacoes
-            .filter(
-              (
-                contratacao
-              ) =>
-                contratacao
-                  .pagamento_devido ===
-                  true &&
-
-                Boolean(
-                  contratacao
-                    .pago_em
-                )
-            )
-            .sort(
-              (
-                a,
-                b
-              ) =>
-                (
-                  b.pago_em ??
-                  ""
-                ).localeCompare(
-                  a.pago_em ??
-                    ""
-                )
-            )
-
-        : [];
-
-
   const quantidade =
-    filtroFinanceiro
-      ? contratacoesExibidas
-          .length
-      : diligenciasExibidas
-          .length;
-
+    diligenciasExibidas
+      .length;
 
   const nomeFiltro =
     filtroAtivo
@@ -1649,57 +953,23 @@ export default async function DiligenciasPage({
       : null;
 
 
-  const totalFinanceiro =
-    contratacoesExibidas
-      .reduce(
-        (
-          total,
-          contratacao
-        ) =>
-          total +
-          (
-            Number(
-              contratacao
-                .valor
-            ) || 0
-          ),
-        0
-      );
-
-
-  const unidadeQuantidade =
-    filtroFinanceiro
-      ? quantidade ===
-          1
-        ? "contratação"
-        : "contratações"
-      : quantidade ===
-          1
-        ? "diligência"
-        : "diligências";
-
-
-  const hoje =
-    hojeEmRecife();
-
-
   /* ===================================================
-     RENDERIZAÇÃO
+     RENDER
   =================================================== */
 
   return (
     <main className="w-full">
 
-      {/* =================================================
+      {/* ===============================================
           CABEÇALHO
-      ================================================== */}
+      ================================================ */}
 
       <section className="mb-8">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
 
           <div>
             <p className="text-sm font-medium text-muted-foreground">
-              Gestão operacional
+              Gestão de diligências
             </p>
 
             <h1 className="mt-1 text-4xl font-bold tracking-tight">
@@ -1707,179 +977,98 @@ export default async function DiligenciasPage({
             </h1>
 
             <p className="mt-2 text-muted-foreground">
-              Consulte, acompanhe e gerencie o ciclo completo das diligências da sua empresa.
+              Consulte as diligências da sua empresa
+              {podeCriar
+                ? " e realize o gerenciamento operacional."
+                : "."}
             </p>
           </div>
 
 
-          <Link
-            href="/protected/diligencias/nova"
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#0b1f3a] px-4 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
-          >
-            <Plus className="h-4 w-4" />
+          {/* SOMENTE MASTER / OPERACIONAL */}
 
-            Nova diligência
-          </Link>
+          {podeCriar && (
+            <Link
+              href="/protected/diligencias/nova"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#0b1f3a] px-4 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+            >
+              <Plus className="h-4 w-4" />
 
-        </div>
-      </section>
-
-
-      {/* =================================================
-          FILTROS DE CICLO / FINANCEIRO
-      ================================================== */}
-
-      <section className="mb-6 rounded-xl border bg-card p-5">
-
-        <div>
-          <p className="text-sm font-semibold">
-            Visões rápidas
-          </p>
-
-          <p className="mt-1 text-sm text-muted-foreground">
-            Acompanhe o encerramento das diligências e a situação dos pagamentos.
-          </p>
-        </div>
-
-
-        <div className="mt-4 flex flex-wrap gap-2">
-
-          <Link
-            href="/protected/diligencias"
-            className={
-              !filtroAtivo
-                ? "rounded-lg bg-[#0b1f3a] px-3.5 py-2 text-sm font-medium text-white"
-                : "rounded-lg border px-3.5 py-2 text-sm font-medium transition-colors hover:bg-muted"
-            }
-          >
-            Todas
-          </Link>
-
-
-          <Link
-            href="/protected/diligencias?filtro=com_desfecho"
-            className={
-              filtroAtivo ===
-                "com_desfecho"
-                ? "rounded-lg bg-[#0b1f3a] px-3.5 py-2 text-sm font-medium text-white"
-                : "rounded-lg border px-3.5 py-2 text-sm font-medium transition-colors hover:bg-muted"
-            }
-          >
-            Com desfecho
-          </Link>
-
-
-          <Link
-            href="/protected/diligencias?filtro=sem_desfecho"
-            className={
-              filtroAtivo ===
-                "sem_desfecho"
-                ? "rounded-lg bg-[#0b1f3a] px-3.5 py-2 text-sm font-medium text-white"
-                : "rounded-lg border px-3.5 py-2 text-sm font-medium transition-colors hover:bg-muted"
-            }
-          >
-            Sem desfecho
-          </Link>
-
-
-          <Link
-            href="/protected/diligencias?filtro=pagamento_pendente"
-            className={
-              filtroAtivo ===
-                "pagamento_pendente"
-                ? "rounded-lg bg-[#0b1f3a] px-3.5 py-2 text-sm font-medium text-white"
-                : "rounded-lg border px-3.5 py-2 text-sm font-medium transition-colors hover:bg-muted"
-            }
-          >
-            Pagamento pendente
-          </Link>
-
-
-          <Link
-            href="/protected/diligencias?filtro=pagamento_realizado"
-            className={
-              filtroAtivo ===
-                "pagamento_realizado"
-                ? "rounded-lg bg-[#0b1f3a] px-3.5 py-2 text-sm font-medium text-white"
-                : "rounded-lg border px-3.5 py-2 text-sm font-medium transition-colors hover:bg-muted"
-            }
-          >
-            Pagamento realizado
-          </Link>
+              Nova diligência
+            </Link>
+          )}
 
         </div>
       </section>
 
 
-    {/* =================================================
+      {/* ===============================================
+          PESQUISA
+      ================================================ */}
+
+      <section className="mb-6 rounded-xl border bg-card p-4">
+        <div className="flex items-center gap-3 rounded-lg border px-4 py-3">
+          <Search className="h-4 w-4 text-muted-foreground" />
+
+          <span className="text-sm text-muted-foreground">
+            Em breve: pesquisar por processo, partes, comarca ou vara
+          </span>
+        </div>
+      </section>
+
+
+      {/* ===============================================
           FILTRO ATIVO
-      ================================================== */}
+      ================================================ */}
 
       {filtroAtivo &&
         nomeFiltro && (
+          <section className="mb-6 rounded-xl border bg-card px-5 py-4">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 
-        <section className="mb-6 rounded-xl border bg-card px-5 py-4">
-
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Filtro ativo
-              </p>
-
-              <div className="mt-1 flex flex-wrap items-center gap-2">
-
-                <p className="font-semibold">
-                  {nomeFiltro}
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Filtro ativo
                 </p>
 
-                <span className="text-sm text-muted-foreground">
-                  •
-                </span>
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <p className="font-semibold">
+                    {nomeFiltro}
+                  </p>
 
-                <p className="text-sm text-muted-foreground">
-                  {quantidade}{" "}
-                  {unidadeQuantidade}
-                </p>
+                  <span className="text-sm text-muted-foreground">
+                    •
+                  </span>
 
-                {filtroFinanceiro && (
-                  <>
-                    <span className="text-sm text-muted-foreground">
-                      •
-                    </span>
-
-                    <p className="text-sm font-semibold">
-                      {formatarMoeda(
-                        totalFinanceiro
-                      )}
-                    </p>
-                  </>
-                )}
-
+                  <p className="text-sm text-muted-foreground">
+                    {quantidade}{" "}
+                    {quantidade ===
+                    1
+                      ? "diligência"
+                      : "diligências"}
+                  </p>
+                </div>
               </div>
+
+              <Link
+                href="/protected/diligencias"
+                className="inline-flex items-center justify-center rounded-lg border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
+              >
+                Limpar filtro
+              </Link>
+
             </div>
+          </section>
+        )}
 
 
-            <Link
-              href="/protected/diligencias"
-              className="inline-flex items-center justify-center rounded-lg border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
-            >
-              Limpar filtro
-            </Link>
-
-          </div>
-        </section>
-      )}
-
-
-      {/* =================================================
+      {/* ===============================================
           LISTA
-      ================================================== */}
+      ================================================ */}
 
       <section className="rounded-xl border bg-card">
 
         <div className="flex items-center justify-between border-b px-6 py-5">
-
           <div>
             <h2 className="text-lg font-semibold">
               {filtroAtivo
@@ -1889,30 +1078,22 @@ export default async function DiligenciasPage({
 
             <p className="mt-1 text-sm text-muted-foreground">
               {quantidade}{" "}
-              {unidadeQuantidade}
-
-              {filtroFinanceiro && (
-                <>
-                  {" • "}
-                  {formatarMoeda(
-                    totalFinanceiro
-                  )}
-                </>
-              )}
+              {quantidade ===
+              1
+                ? "diligência"
+                : "diligências"}
             </p>
           </div>
-
         </div>
 
 
-        {/* =================================================
-            SEM RESULTADOS
-        ================================================== */}
+        {/* =============================================
+            NENHUM RESULTADO DO FILTRO
+        ============================================== */}
 
         {filtroAtivo &&
         quantidade ===
           0 ? (
-
           <div className="flex min-h-72 flex-col items-center justify-center px-6 text-center">
 
             <div className="rounded-full bg-muted p-4">
@@ -1920,11 +1101,11 @@ export default async function DiligenciasPage({
             </div>
 
             <h3 className="mt-5 text-lg font-semibold">
-              Nenhum resultado encontrado
+              Nenhuma diligência encontrada
             </h3>
 
             <p className="mt-2 max-w-md text-sm text-muted-foreground">
-              Não existem registros que atendam ao filtro{" "}
+              Não existem diligências que atendam ao filtro{" "}
               <strong>
                 {nomeFiltro}
               </strong>{" "}
@@ -1939,11 +1120,16 @@ export default async function DiligenciasPage({
             </Link>
 
           </div>
+        ) :
 
-        ) : !filtroAtivo &&
-          quantidade ===
-            0 ? (
 
+        /* =============================================
+           NENHUMA DILIGÊNCIA CADASTRADA
+        ============================================== */
+
+        !filtroAtivo &&
+        quantidade ===
+          0 ? (
           <div className="flex min-h-72 flex-col items-center justify-center px-6 text-center">
 
             <div className="rounded-full bg-muted p-4">
@@ -1954,298 +1140,52 @@ export default async function DiligenciasPage({
               Nenhuma diligência cadastrada
             </h3>
 
-            <p className="mt-2 max-w-md text-sm text-muted-foreground">
-              Cadastre sua primeira diligência manualmente ou importe uma pauta em Excel.
-            </p>
 
-            <Link
-              href="/protected/diligencias/nova"
-              className="mt-6 inline-flex items-center gap-2 rounded-lg bg-[#0b1f3a] px-4 py-2.5 text-sm font-medium text-white"
-            >
-              <Plus className="h-4 w-4" />
-
-              Cadastrar primeira diligência
-            </Link>
-
-          </div>
-
-        ) : filtroFinanceiro ? (
-
-          /* =================================================
-             RESULTADOS FINANCEIROS
-
-             IMPORTANTE:
-             UMA CONTRATAÇÃO = UMA LINHA
-          ================================================== */
-
-          <div className="divide-y">
-
-            {contratacoesExibidas.map(
-              (
-                contratacao
-              ) => {
-
-                const diligencia =
-                  diligenciaPorId.get(
-                    contratacao
-                      .diligencia_id
-                  );
-
-
-                const profissional =
-                  profissionalPorId.get(
-                    contratacao
-                      .correspondente_id
-                  );
-
-
-                if (!diligencia) {
-                  return null;
-                }
-
-
-                const identificacao =
-                  identificacaoProfissional(
-                    profissional,
-                    contratacao
-                      .tipo_profissional
-                  );
-
-
-                const vencido =
-                  filtroAtivo ===
-                    "pagamento_pendente" &&
-
-                  Boolean(
-                    contratacao
-                      .pagamento_combinado_em
-                  ) &&
-
-                  (
-                    contratacao
-                      .pagamento_combinado_em as string
-                  ) <
-                    hoje;
-
-
-                return (
-                  <article
-                    key={
-                      contratacao.id
-                    }
-                    className="px-6 py-6"
-                  >
-
-                    <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-
-                      <div className="min-w-0 flex-1">
-
-                        <div className="flex flex-wrap items-center gap-2">
-
-                          <span className="rounded-md bg-muted px-2.5 py-1 text-xs font-medium">
-                            {
-                              diligencia
-                                .tipo_diligencia
-                            }
-                          </span>
-
-
-                          {contratacao
-                            .tipo_profissional ===
-                            "advogado" ? (
-
-                            <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-800">
-                              Advogado
-                            </span>
-
-                          ) : (
-
-                            <span className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-800">
-                              Preposto
-                            </span>
-                          )}
-
-
-                          {vencido && (
-                            <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-800">
-                              <CircleAlert className="h-3.5 w-3.5" />
-
-                              Pagamento em atraso
-                            </span>
-                          )}
-
-                        </div>
-
-
-                        <p className="mt-3 font-mono text-sm text-muted-foreground">
-                          {formatarProcesso(
-                            diligencia
-                              .numero_processo
-                          )}
-                        </p>
-
-
-                        <p className="mt-2 font-semibold">
-                          {diligencia
-                            .parte_autora ||
-                            "Parte autora não informada"}
-
-                          {" x "}
-
-                          {diligencia
-                            .parte_re ||
-                            "Parte ré não informada"}
-                        </p>
-
-
-                        <div className="mt-4 grid gap-4 rounded-lg bg-muted/30 p-4 sm:grid-cols-2 xl:grid-cols-4">
-
-                          <div>
-                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                              Profissional
-                            </p>
-
-                            <p className="mt-1 text-sm font-medium">
-                              {profissional
-                                ?.nome ||
-                                "Profissional não localizado"}
-                            </p>
-
-                            {identificacao && (
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                {identificacao}
-                              </p>
-                            )}
-                          </div>
-
-
-                          <div>
-                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                              Diligência
-                            </p>
-
-                            <p className="mt-1 text-sm font-medium">
-                              {formatarData(
-                                diligencia
-                                  .data_diligencia
-                              )}
-
-                              {" às "}
-
-                              {diligencia
-                                .horario
-                                .slice(
-                                  0,
-                                  5
-                                )}
-                            </p>
-
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              {diligencia
-                                .vara ||
-                                "Vara não informada"}
-
-                              {diligencia
-                                .comarca
-                                ? ` • ${diligencia.comarca}`
-                                : ""}
-
-                              {diligencia.uf
-                                ? `/${diligencia.uf}`
-                                : ""}
-                            </p>
-                          </div>
-
-
-                          <div>
-                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                              Valor
-                            </p>
-
-                            <p className="mt-1 text-lg font-semibold">
-                              {formatarMoeda(
-                                contratacao
-                                  .valor
-                              )}
-                            </p>
-                          </div>
-
-
-                          <div>
-                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                              Pagamento combinado
-                            </p>
-
-                            <p
-                              className={
-                                vencido
-                                  ? "mt-1 text-sm font-semibold text-red-700"
-                                  : "mt-1 text-sm font-medium"
-                              }
-                            >
-                              {formatarData(
-                                contratacao
-                                  .pagamento_combinado_em
-                              )}
-                            </p>
-                          </div>
-
-                        </div>
-                      </div>
-
-
-                      <div className="flex min-w-[220px] flex-col items-start gap-3 xl:items-end">
-
-                        <ControlePagamento
-                          contratacaoId={
-                            contratacao.id
-                          }
-                          pagoEm={
-                            contratacao
-                              .pago_em
-                          }
-                          podeGerenciar={
-                            podeGerenciarPagamento
-                          }
-                        />
-
-
-                        <Link
-                          href={`/protected/diligencias/${diligencia.id}`}
-                          className="inline-flex items-center justify-center rounded-lg border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
-                        >
-                          Ver diligência
-                        </Link>
-
-                      </div>
-
-                    </div>
-                  </article>
-                );
-              }
+            {podeCriar ? (
+              <>
+                <p className="mt-2 max-w-md text-sm text-muted-foreground">
+                  Cadastre sua primeira diligência manualmente ou importe uma pauta em Excel.
+                </p>
+
+                <Link
+                  href="/protected/diligencias/nova"
+                  className="mt-6 inline-flex items-center gap-2 rounded-lg bg-[#0b1f3a] px-4 py-2.5 text-sm font-medium text-white"
+                >
+                  <Plus className="h-4 w-4" />
+
+                  Cadastrar primeira diligência
+                </Link>
+              </>
+            ) : (
+              <p className="mt-2 max-w-md text-sm text-muted-foreground">
+                Ainda não há diligências cadastradas para consulta.
+              </p>
             )}
 
           </div>
-
         ) : (
 
-          /* =================================================
-             RESULTADOS POR DILIGÊNCIA
-          ================================================== */
+
+          /* ===========================================
+             RESULTADOS
+          ============================================ */
 
           <div className="divide-y">
-
             {diligenciasExibidas.map(
               (
                 diligencia
               ) => {
-
-                const dataFormatada =
-                  formatarData(
-                    diligencia
-                      .data_diligencia
+                const data =
+                  new Date(
+                    `${diligencia.data_diligencia}T12:00:00`
                   );
 
+                const dataFormatada =
+                  new Intl.DateTimeFormat(
+                    "pt-BR"
+                  ).format(
+                    data
+                  );
 
                 const horarioFormatado =
                   diligencia
@@ -2253,15 +1193,8 @@ export default async function DiligenciasPage({
                     ?.slice(
                       0,
                       5
-                    );
-
-
-                const resultado =
-                  textoResultado(
-                    diligencia
-                      .resultado_diligencia
-                  );
-
+                    ) ||
+                  "Não informado";
 
                 return (
                   <Link
@@ -2271,7 +1204,6 @@ export default async function DiligenciasPage({
                     href={`/protected/diligencias/${diligencia.id}`}
                     className="block px-6 py-5 transition-colors hover:bg-muted/40"
                   >
-
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
 
                       <div className="min-w-0">
@@ -2285,33 +1217,13 @@ export default async function DiligenciasPage({
                             }
                           </span>
 
-
                           {diligencia
                             .numero_processo && (
-
                             <span className="text-sm text-muted-foreground">
                               {formatarProcesso(
                                 diligencia
                                   .numero_processo
                               )}
-                            </span>
-                          )}
-
-
-                          {diligencia
-                            .desfecho_em && (
-
-                            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800">
-                              <CheckCircle2 className="h-3.5 w-3.5" />
-
-                              Desfecho registrado
-                            </span>
-                          )}
-
-
-                          {resultado && (
-                            <span className="rounded-full border px-2.5 py-1 text-xs font-medium text-muted-foreground">
-                              {resultado}
                             </span>
                           )}
 
@@ -2341,7 +1253,8 @@ export default async function DiligenciasPage({
                             ? ` • ${diligencia.comarca}`
                             : ""}
 
-                          {diligencia.uf
+                          {diligencia
+                            .uf
                             ? `/${diligencia.uf}`
                             : ""}
                         </p>
@@ -2368,18 +1281,6 @@ export default async function DiligenciasPage({
                           }
                         </div>
 
-
-                        {diligencia
-                          .financeiro_status ===
-                          "liberado_para_pagamento" && (
-
-                          <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                            <DollarSign className="h-4 w-4" />
-
-                            Liberado para pagamento
-                          </div>
-                        )}
-
                       </div>
 
                     </div>
@@ -2387,7 +1288,6 @@ export default async function DiligenciasPage({
                 );
               }
             )}
-
           </div>
         )}
 

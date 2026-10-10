@@ -16,7 +16,12 @@ import {
   ChartNoAxesColumnIncreasing,
   UserCog,
   Settings,
+  LogOut,
 } from "lucide-react";
+
+import {
+  sair,
+} from "@/app/auth/logout/actions";
 
 
 export type TipoAcessoSidebar =
@@ -156,12 +161,22 @@ const itensMenu:
       "master",
     ],
   },
+
   {
-    nome: "Auditoria",
-    href: "/protected/auditoria",
-    icone: History,
-    acessos: ["master"],
+    nome:
+      "Auditoria",
+
+    href:
+      "/protected/auditoria",
+
+    icone:
+      History,
+
+    acessos: [
+      "master",
+    ],
   },
+
   {
     nome:
       "Configurações",
@@ -175,7 +190,6 @@ const itensMenu:
     acessos: [
       "master",
     ],
-    
   },
 ];
 
@@ -300,15 +314,41 @@ export function Sidebar({
 
       {/* Rodapé */}
 
-      <div className="border-t border-white/10 px-7 py-5">
+      <div className="border-t border-white/10 px-4 py-5">
 
-        <p className="text-xs text-white/45">
-          NOTE LITIS
-        </p>
+        <form
+          action={
+            sair
+          }
+        >
 
-        <p className="mt-1 text-xs text-white/30">
-          Sistema de gestão de diligências
-        </p>
+          <button
+            type="submit"
+            className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-sm text-white/70 transition-colors hover:bg-white/5 hover:text-white"
+          >
+
+            <LogOut className="h-4 w-4" />
+
+            <span>
+              Sair
+            </span>
+
+          </button>
+
+        </form>
+
+
+        <div className="mt-4 px-3">
+
+          <p className="text-xs text-white/45">
+            NOTE LITIS
+          </p>
+
+          <p className="mt-1 text-xs text-white/30">
+            Sistema de gestão de diligências
+          </p>
+
+        </div>
 
       </div>
 

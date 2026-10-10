@@ -6,13 +6,13 @@ import {
   exigirPermissao,
 } from "@/lib/permissoes";
 
-export default async function DiligenciasLayout({
+export default async function NovaDiligenciaLayout({
   children,
 }: {
   children: ReactNode;
 }) {
   await exigirPermissao(
-    "diligencias.visualizar"
+    "diligencias.criar"
   );
 
   return (

@@ -14,7 +14,6 @@ import {
 
 import { createClient } from "@/lib/supabase/server";
 
-export const instant = false;
 
 /* =====================================================
    TIPOS

@@ -1,13 +1,13 @@
 "use client";
 
 import {
-  useEffect,
   useState,
 } from "react";
 
 import {
   CheckCircle2,
   LoaderCircle,
+  RotateCcw,
   Search,
   Scale,
   UserPlus,
@@ -23,6 +23,8 @@ import {
   cadastrarAdvogado,
   cadastrarPreposto,
   cadastrarTestemunha,
+  reativarAdvogado,
+  reativarPreposto,
   type AdvogadoParticipante,
   type PrepostoParticipante,
   type TestemunhaParticipante,
@@ -32,34 +34,45 @@ type Props = {
   disabled?: boolean;
 
   advogadoInicial?:
-    AdvogadoParticipante | null;
+    AdvogadoParticipante |
+    null;
 
   necessitaPrepostoInicial?:
-    boolean | null;
+    boolean |
+    null;
 
   prepostoInicial?:
-    PrepostoParticipante | null;
+    PrepostoParticipante |
+    null;
 
   testemunhasConfirmadasInicial?:
-  boolean | null;
+    boolean |
+    null;
 
-testemunhasStatusInicial?:
-  | "confirmadas"
-  | "desnecessarias"
-  | null;
-
-testemunhasIniciais?:
-  TestemunhaParticipante[];
+  testemunhasIniciais?:
+    TestemunhaParticipante[];
 };
 
-function somenteNumeros(valor: string) {
-  return valor.replace(/\D/g, "");
+function somenteNumeros(
+  valor: string
+) {
+  return valor.replace(
+    /\D/g,
+    ""
+  );
 }
 
-function formatarCPF(valor: string) {
-  const cpf = somenteNumeros(valor);
+function formatarCPF(
+  valor: string
+) {
+  const cpf =
+    somenteNumeros(
+      valor
+    );
 
-  if (cpf.length !== 11) {
+  if (
+    cpf.length !== 11
+  ) {
     return valor;
   }
 
@@ -80,9 +93,7 @@ export function ParticipantesDiligencia({
 
   prepostoInicial = null,
 
- testemunhasConfirmadasInicial = null,
-
-  testemunhasStatusInicial = null,
+  testemunhasConfirmadasInicial = null,
 
   testemunhasIniciais = [],
 }: Props) {
@@ -90,55 +101,117 @@ export function ParticipantesDiligencia({
      ADVOGADO
   ===================================================== */
 
-  const [oabNumero, setOabNumero] =
-  useState(
-    advogadoInicial?.oab_numero ?? ""
-  );
+  const [
+    oabNumero,
+    setOabNumero,
+  ] =
+    useState(
+      advogadoInicial
+        ?.oab_numero ??
+      ""
+    );
 
-  const [oabUf, setOabUf] =
-  useState(
-    advogadoInicial?.oab_uf ?? ""
-  );
+  const [
+    oabUf,
+    setOabUf,
+  ] =
+    useState(
+      advogadoInicial
+        ?.oab_uf ??
+      ""
+    );
 
-  const [advogado, setAdvogado] =
-  useState<AdvogadoParticipante | null>(
-    advogadoInicial
-  );
+  const [
+    advogado,
+    setAdvogado,
+  ] =
+    useState<
+      AdvogadoParticipante |
+      null
+    >(
+      advogadoInicial
+    );
 
   const [
     advogadoNaoEncontrado,
     setAdvogadoNaoEncontrado,
-  ] = useState(false);
+  ] =
+    useState(
+      false
+    );
+
+  const [
+    advogadoDesativado,
+    setAdvogadoDesativado,
+  ] =
+    useState<
+      AdvogadoParticipante |
+      null
+    >(
+      null
+    );
 
   const [
     nomeNovoAdvogado,
     setNomeNovoAdvogado,
-  ] = useState("");
+  ] =
+    useState(
+      ""
+    );
 
   const [
     mensagemAdvogado,
     setMensagemAdvogado,
-  ] = useState("");
+  ] =
+    useState(
+      ""
+    );
 
   const [
     erroAdvogado,
     setErroAdvogado,
-  ] = useState("");
+  ] =
+    useState(
+      ""
+    );
 
   const [
     carregandoAdvogado,
     setCarregandoAdvogado,
-  ] = useState(false);
+  ] =
+    useState(
+      false
+    );
 
   async function handleBuscarAdvogado() {
-    setErroAdvogado("");
-    setMensagemAdvogado("");
-    setAdvogadoNaoEncontrado(false);
-    setAdvogado(null);
+    setErroAdvogado(
+      ""
+    );
+
+    setMensagemAdvogado(
+      ""
+    );
+
+    setAdvogado(
+      null
+    );
+
+    setAdvogadoNaoEncontrado(
+      false
+    );
+
+    setAdvogadoDesativado(
+      null
+    );
 
     if (
-      !somenteNumeros(oabNumero) ||
-      oabUf.trim().length !== 2
+      !somenteNumeros(
+        oabNumero
+      ) ||
+      oabUf
+        .trim()
+        .length !==
+        2
     ) {
       setErroAdvogado(
         "Informe o número da OAB e a UF."
@@ -148,7 +221,9 @@ export function ParticipantesDiligencia({
     }
 
     try {
-      setCarregandoAdvogado(true);
+      setCarregandoAdvogado(
+        true
+      );
 
       const resultado =
         await buscarAdvogado(
@@ -157,42 +232,142 @@ export function ParticipantesDiligencia({
         );
 
       if (
-        resultado.encontrado &&
+        resultado.status ===
+          "ativo" &&
         resultado.participante
       ) {
         setAdvogado(
-          resultado.participante
+          resultado
+            .participante
         );
 
         setMensagemAdvogado(
-          resultado.mensagem
+          resultado
+            .mensagem
         );
 
         return;
       }
 
-      setAdvogadoNaoEncontrado(true);
+      if (
+        resultado.status ===
+          "desativado" &&
+        resultado.participante
+      ) {
+        setAdvogadoDesativado(
+          resultado
+            .participante
+        );
+
+        setAdvogadoNaoEncontrado(
+          false
+        );
+
+        setMensagemAdvogado(
+          ""
+        );
+
+        return;
+      }
+
+      setAdvogadoDesativado(
+        null
+      );
+
+      setAdvogadoNaoEncontrado(
+        true
+      );
 
       setMensagemAdvogado(
-        resultado.mensagem
+        resultado
+          .mensagem
       );
-    } catch (error) {
+    } catch (
+      error
+    ) {
       setErroAdvogado(
         error instanceof Error
           ? error.message
           : "Não foi possível buscar o advogado."
       );
     } finally {
-      setCarregandoAdvogado(false);
+      setCarregandoAdvogado(
+        false
+      );
+    }
+  }
+
+  async function handleReativarAdvogado() {
+    if (
+      !advogadoDesativado
+    ) {
+      return;
+    }
+
+    setErroAdvogado(
+      ""
+    );
+
+    setMensagemAdvogado(
+      ""
+    );
+
+    try {
+      setCarregandoAdvogado(
+        true
+      );
+
+      const resultado =
+        await reativarAdvogado(
+          advogadoDesativado
+            .id
+        );
+
+      setAdvogado(
+        resultado
+          .participante
+      );
+
+      setAdvogadoDesativado(
+        null
+      );
+
+      setAdvogadoNaoEncontrado(
+        false
+      );
+
+      setMensagemAdvogado(
+        resultado
+          .mensagem
+      );
+    } catch (
+      error
+    ) {
+      setErroAdvogado(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível reativar o advogado."
+      );
+    } finally {
+      setCarregandoAdvogado(
+        false
+      );
     }
   }
 
   async function handleCadastrarAdvogado() {
-    setErroAdvogado("");
-    setMensagemAdvogado("");
+    setErroAdvogado(
+      ""
+    );
+
+    setMensagemAdvogado(
+      ""
+    );
 
     try {
-      setCarregandoAdvogado(true);
+      setCarregandoAdvogado(
+        true
+      );
 
       const resultado =
         await cadastrarAdvogado(
@@ -202,33 +377,69 @@ export function ParticipantesDiligencia({
         );
 
       setAdvogado(
-        resultado.participante
+        resultado
+          .participante
       );
 
-      setAdvogadoNaoEncontrado(false);
+      setAdvogadoNaoEncontrado(
+        false
+      );
+
+      setAdvogadoDesativado(
+        null
+      );
 
       setMensagemAdvogado(
-        resultado.mensagem
+        resultado
+          .mensagem
       );
-    } catch (error) {
+    } catch (
+      error
+    ) {
       setErroAdvogado(
         error instanceof Error
           ? error.message
           : "Não foi possível cadastrar o advogado."
       );
     } finally {
-      setCarregandoAdvogado(false);
+      setCarregandoAdvogado(
+        false
+      );
     }
   }
 
   function limparAdvogado() {
-    setAdvogado(null);
-    setOabNumero("");
-    setOabUf("");
-    setNomeNovoAdvogado("");
-    setAdvogadoNaoEncontrado(false);
-    setMensagemAdvogado("");
-    setErroAdvogado("");
+    setAdvogado(
+      null
+    );
+
+    setOabNumero(
+      ""
+    );
+
+    setOabUf(
+      ""
+    );
+
+    setNomeNovoAdvogado(
+      ""
+    );
+
+    setAdvogadoNaoEncontrado(
+      false
+    );
+
+    setAdvogadoDesativado(
+      null
+    );
+
+    setMensagemAdvogado(
+      ""
+    );
+
+    setErroAdvogado(
+      ""
+    );
   }
 
   /* =====================================================
@@ -236,90 +447,163 @@ export function ParticipantesDiligencia({
   ===================================================== */
 
   const [
-  necessitaPreposto,
-  setNecessitaPreposto,
-] = useState<"" | "true" | "false">(
-  necessitaPrepostoInicial === true
-    ? "true"
-    : necessitaPrepostoInicial === false
-      ? "false"
-      : ""
-);
-
-const necessitaPrepostoEfetivo =
-  necessitaPreposto !== ""
-    ? necessitaPreposto
-    : necessitaPrepostoInicial === true
-      ? "true"
-      : necessitaPrepostoInicial === false
-        ? "false"
-        : "";
-
-
+    necessitaPreposto,
+    setNecessitaPreposto,
+  ] =
+    useState<
+      "" |
+      "true" |
+      "false"
+    >(
+      necessitaPrepostoInicial ===
+        true
+        ? "true"
+        : necessitaPrepostoInicial ===
+            false
+          ? "false"
+          : ""
+    );
 
   const [
-  cpfPreposto,
-  setCpfPreposto,
-] = useState(
-  prepostoInicial?.cpf ?? ""
-);
+    cpfPreposto,
+    setCpfPreposto,
+  ] =
+    useState(
+      prepostoInicial
+        ?.cpf ??
+      ""
+    );
 
   const [
-  preposto,
-  setPreposto,
-] =
-  useState<PrepostoParticipante | null>(
-    prepostoInicial
-  );
+    preposto,
+    setPreposto,
+  ] =
+    useState<
+      PrepostoParticipante |
+      null
+    >(
+      prepostoInicial
+    );
 
   const [
     prepostoNaoEncontrado,
     setPrepostoNaoEncontrado,
-  ] = useState(false);
+  ] =
+    useState(
+      false
+    );
+
+  const [
+    prepostoDesativado,
+    setPrepostoDesativado,
+  ] =
+    useState<
+      PrepostoParticipante |
+      null
+    >(
+      null
+    );
 
   const [
     nomeNovoPreposto,
     setNomeNovoPreposto,
-  ] = useState("");
+  ] =
+    useState(
+      ""
+    );
 
   const [
     mensagemPreposto,
     setMensagemPreposto,
-  ] = useState("");
+  ] =
+    useState(
+      ""
+    );
 
   const [
     erroPreposto,
     setErroPreposto,
-  ] = useState("");
+  ] =
+    useState(
+      ""
+    );
 
   const [
     carregandoPreposto,
     setCarregandoPreposto,
-  ] = useState(false);
+  ] =
+    useState(
+      false
+    );
 
   function alterarNecessidadePreposto(
-    valor: "true" | "false"
+    valor:
+      | "true"
+      | "false"
   ) {
-    setNecessitaPreposto(valor);
+    setNecessitaPreposto(
+      valor
+    );
 
-    if (valor === "false") {
-      setPreposto(null);
-      setCpfPreposto("");
-      setNomeNovoPreposto("");
-      setPrepostoNaoEncontrado(false);
-      setMensagemPreposto("");
-      setErroPreposto("");
+    if (
+      valor ===
+      "false"
+    ) {
+      setPreposto(
+        null
+      );
+
+      setCpfPreposto(
+        ""
+      );
+
+      setNomeNovoPreposto(
+        ""
+      );
+
+      setPrepostoNaoEncontrado(
+        false
+      );
+
+      setPrepostoDesativado(
+        null
+      );
+
+      setMensagemPreposto(
+        ""
+      );
+
+      setErroPreposto(
+        ""
+      );
     }
   }
 
   async function handleBuscarPreposto() {
-    setErroPreposto("");
-    setMensagemPreposto("");
-    setPreposto(null);
-    setPrepostoNaoEncontrado(false);
+    setErroPreposto(
+      ""
+    );
+
+    setMensagemPreposto(
+      ""
+    );
+
+    setPreposto(
+      null
+    );
+
+    setPrepostoNaoEncontrado(
+      false
+    );
+
+    setPrepostoDesativado(
+      null
+    );
 
     try {
-      setCarregandoPreposto(true);
+      setCarregandoPreposto(
+        true
+      );
 
       const resultado =
         await buscarPreposto(
@@ -327,42 +611,142 @@ const necessitaPrepostoEfetivo =
         );
 
       if (
-        resultado.encontrado &&
+        resultado.status ===
+          "ativo" &&
         resultado.participante
       ) {
         setPreposto(
-          resultado.participante
+          resultado
+            .participante
         );
 
         setMensagemPreposto(
-          resultado.mensagem
+          resultado
+            .mensagem
         );
 
         return;
       }
 
-      setPrepostoNaoEncontrado(true);
+      if (
+        resultado.status ===
+          "desativado" &&
+        resultado.participante
+      ) {
+        setPrepostoDesativado(
+          resultado
+            .participante
+        );
+
+        setPrepostoNaoEncontrado(
+          false
+        );
+
+        setMensagemPreposto(
+          ""
+        );
+
+        return;
+      }
+
+      setPrepostoDesativado(
+        null
+      );
+
+      setPrepostoNaoEncontrado(
+        true
+      );
 
       setMensagemPreposto(
-        resultado.mensagem
+        resultado
+          .mensagem
       );
-    } catch (error) {
+    } catch (
+      error
+    ) {
       setErroPreposto(
         error instanceof Error
           ? error.message
           : "Não foi possível buscar o preposto."
       );
     } finally {
-      setCarregandoPreposto(false);
+      setCarregandoPreposto(
+        false
+      );
+    }
+  }
+
+  async function handleReativarPreposto() {
+    if (
+      !prepostoDesativado
+    ) {
+      return;
+    }
+
+    setErroPreposto(
+      ""
+    );
+
+    setMensagemPreposto(
+      ""
+    );
+
+    try {
+      setCarregandoPreposto(
+        true
+      );
+
+      const resultado =
+        await reativarPreposto(
+          prepostoDesativado
+            .id
+        );
+
+      setPreposto(
+        resultado
+          .participante
+      );
+
+      setPrepostoDesativado(
+        null
+      );
+
+      setPrepostoNaoEncontrado(
+        false
+      );
+
+      setMensagemPreposto(
+        resultado
+          .mensagem
+      );
+    } catch (
+      error
+    ) {
+      setErroPreposto(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível reativar o preposto."
+      );
+    } finally {
+      setCarregandoPreposto(
+        false
+      );
     }
   }
 
   async function handleCadastrarPreposto() {
-    setErroPreposto("");
-    setMensagemPreposto("");
+    setErroPreposto(
+      ""
+    );
+
+    setMensagemPreposto(
+      ""
+    );
 
     try {
-      setCarregandoPreposto(true);
+      setCarregandoPreposto(
+        true
+      );
 
       const resultado =
         await cadastrarPreposto(
@@ -371,157 +755,206 @@ const necessitaPrepostoEfetivo =
         );
 
       setPreposto(
-        resultado.participante
+        resultado
+          .participante
       );
 
-      setPrepostoNaoEncontrado(false);
+      setPrepostoNaoEncontrado(
+        false
+      );
+
+      setPrepostoDesativado(
+        null
+      );
 
       setMensagemPreposto(
-        resultado.mensagem
+        resultado
+          .mensagem
       );
-    } catch (error) {
+    } catch (
+      error
+    ) {
       setErroPreposto(
         error instanceof Error
           ? error.message
           : "Não foi possível cadastrar o preposto."
       );
     } finally {
-      setCarregandoPreposto(false);
+      setCarregandoPreposto(
+        false
+      );
     }
   }
 
   function limparPreposto() {
-    setPreposto(null);
-    setCpfPreposto("");
-    setNomeNovoPreposto("");
-    setPrepostoNaoEncontrado(false);
-    setMensagemPreposto("");
-    setErroPreposto("");
+    setPreposto(
+      null
+    );
+
+    setCpfPreposto(
+      ""
+    );
+
+    setNomeNovoPreposto(
+      ""
+    );
+
+    setPrepostoNaoEncontrado(
+      false
+    );
+
+    setPrepostoDesativado(
+      null
+    );
+
+    setMensagemPreposto(
+      ""
+    );
+
+    setErroPreposto(
+      ""
+    );
   }
 
   /* =====================================================
      TESTEMUNHAS
   ===================================================== */
 
- const [
-  testemunhasStatus,
-  setTestemunhasStatus,
-] = useState<
-  | ""
-  | "confirmadas"
-  | "desnecessarias"
->(
-  testemunhasStatusInicial ===
-    "confirmadas"
-    ? "confirmadas"
-    : testemunhasStatusInicial ===
-        "desnecessarias"
-      ? "desnecessarias"
-      : testemunhasConfirmadasInicial ===
-          true
-        ? "confirmadas"
-        : ""
-);
-
-useEffect(() => {
-  setTestemunhasStatus(
-    testemunhasStatusInicial ===
-      "confirmadas"
-      ? "confirmadas"
-      : testemunhasStatusInicial ===
-          "desnecessarias"
-        ? "desnecessarias"
+  const [
+    testemunhasConfirmadas,
+    setTestemunhasConfirmadas,
+  ] =
+    useState<
+      "" |
+      "true" |
+      "false"
+    >(
+      testemunhasConfirmadasInicial ===
+        true
+        ? "true"
         : testemunhasConfirmadasInicial ===
-            true
-          ? "confirmadas"
+            false
+          ? "false"
           : ""
-  );
-}, [
-  testemunhasStatusInicial,
-  testemunhasConfirmadasInicial,
-]);
+    );
 
   const [
     cpfTestemunha,
     setCpfTestemunha,
-  ] = useState("");
+  ] =
+    useState(
+      ""
+    );
 
- const [
-  testemunhas,
-  setTestemunhas,
-] = useState<
-  TestemunhaParticipante[]
->(testemunhasIniciais);
+  const [
+    testemunhas,
+    setTestemunhas,
+  ] =
+    useState<
+      TestemunhaParticipante[]
+    >(
+      testemunhasIniciais
+    );
 
   const [
     testemunhaNaoEncontrada,
     setTestemunhaNaoEncontrada,
-  ] = useState(false);
+  ] =
+    useState(
+      false
+    );
 
   const [
     nomeNovaTestemunha,
     setNomeNovaTestemunha,
-  ] = useState("");
+  ] =
+    useState(
+      ""
+    );
 
   const [
     mensagemTestemunha,
     setMensagemTestemunha,
-  ] = useState("");
+  ] =
+    useState(
+      ""
+    );
 
   const [
     erroTestemunha,
     setErroTestemunha,
-  ] = useState("");
+  ] =
+    useState(
+      ""
+    );
 
   const [
     carregandoTestemunha,
     setCarregandoTestemunha,
-  ] = useState(false);
+  ] =
+    useState(
+      false
+    );
 
-  function alterarTestemunhasStatus(
-  valor:
-    | "confirmadas"
-    | "desnecessarias"
-) {
-  setTestemunhasStatus(valor);
-
-  if (
-    valor === "desnecessarias"
+  function alterarTestemunhasConfirmadas(
+    valor:
+      | "true"
+      | "false"
   ) {
-    setTestemunhas([]);
-    setCpfTestemunha("");
-    setNomeNovaTestemunha("");
-    setTestemunhaNaoEncontrada(false);
-    setMensagemTestemunha("");
-    setErroTestemunha("");
+    setTestemunhasConfirmadas(
+      valor
+    );
+
+    if (
+      valor ===
+      "false"
+    ) {
+      setTestemunhas(
+        []
+      );
+
+      setCpfTestemunha(
+        ""
+      );
+
+      setNomeNovaTestemunha(
+        ""
+      );
+
+      setTestemunhaNaoEncontrada(
+        false
+      );
+
+      setMensagemTestemunha(
+        ""
+      );
+
+      setErroTestemunha(
+        ""
+      );
+    }
   }
-}
-
-function limparTestemunhasStatus() {
-  setTestemunhasStatus("");
-
-  setTestemunhas([]);
-  setCpfTestemunha("");
-  setNomeNovaTestemunha("");
-  setTestemunhaNaoEncontrada(false);
-  setMensagemTestemunha("");
-  setErroTestemunha("");
-}
 
   function adicionarTestemunha(
     participante:
       TestemunhaParticipante
   ) {
     setTestemunhas(
-      (atuais) => {
+      (
+        atuais
+      ) => {
         const jaExiste =
           atuais.some(
-            (item) =>
+            (
+              item
+            ) =>
               item.id ===
               participante.id
           );
 
-        if (jaExiste) {
+        if (
+          jaExiste
+        ) {
           return atuais;
         }
 
@@ -534,12 +967,22 @@ function limparTestemunhasStatus() {
   }
 
   async function handleBuscarTestemunha() {
-    setErroTestemunha("");
-    setMensagemTestemunha("");
-    setTestemunhaNaoEncontrada(false);
+    setErroTestemunha(
+      ""
+    );
+
+    setMensagemTestemunha(
+      ""
+    );
+
+    setTestemunhaNaoEncontrada(
+      false
+    );
 
     try {
-      setCarregandoTestemunha(true);
+      setCarregandoTestemunha(
+        true
+      );
 
       const resultado =
         await buscarTestemunha(
@@ -552,18 +995,25 @@ function limparTestemunhasStatus() {
       ) {
         const jaVinculada =
           testemunhas.some(
-            (item) =>
+            (
+              item
+            ) =>
               item.id ===
-              resultado.participante.id
+              resultado
+                .participante
+                .id
           );
 
-        if (jaVinculada) {
+        if (
+          jaVinculada
+        ) {
           setMensagemTestemunha(
             "Esta testemunha já está vinculada à diligência."
           );
         } else {
           adicionarTestemunha(
-            resultado.participante
+            resultado
+              .participante
           );
 
           setMensagemTestemunha(
@@ -571,7 +1021,9 @@ function limparTestemunhasStatus() {
           );
         }
 
-        setCpfTestemunha("");
+        setCpfTestemunha(
+          ""
+        );
 
         return;
       }
@@ -581,25 +1033,37 @@ function limparTestemunhasStatus() {
       );
 
       setMensagemTestemunha(
-        resultado.mensagem
+        resultado
+          .mensagem
       );
-    } catch (error) {
+    } catch (
+      error
+    ) {
       setErroTestemunha(
         error instanceof Error
           ? error.message
           : "Não foi possível buscar a testemunha."
       );
     } finally {
-      setCarregandoTestemunha(false);
+      setCarregandoTestemunha(
+        false
+      );
     }
   }
 
   async function handleCadastrarTestemunha() {
-    setErroTestemunha("");
-    setMensagemTestemunha("");
+    setErroTestemunha(
+      ""
+    );
+
+    setMensagemTestemunha(
+      ""
+    );
 
     try {
-      setCarregandoTestemunha(true);
+      setCarregandoTestemunha(
+        true
+      );
 
       const resultado =
         await cadastrarTestemunha(
@@ -608,27 +1072,37 @@ function limparTestemunhasStatus() {
         );
 
       adicionarTestemunha(
-        resultado.participante
+        resultado
+          .participante
       );
 
       setTestemunhaNaoEncontrada(
         false
       );
 
-      setNomeNovaTestemunha("");
-      setCpfTestemunha("");
+      setNomeNovaTestemunha(
+        ""
+      );
+
+      setCpfTestemunha(
+        ""
+      );
 
       setMensagemTestemunha(
         `${resultado.mensagem} A testemunha foi adicionada à diligência.`
       );
-    } catch (error) {
+    } catch (
+      error
+    ) {
       setErroTestemunha(
         error instanceof Error
           ? error.message
           : "Não foi possível cadastrar a testemunha."
       );
     } finally {
-      setCarregandoTestemunha(false);
+      setCarregandoTestemunha(
+        false
+      );
     }
   }
 
@@ -636,19 +1110,22 @@ function limparTestemunhasStatus() {
     id: string
   ) {
     setTestemunhas(
-      (atuais) =>
+      (
+        atuais
+      ) =>
         atuais.filter(
-          (item) =>
-            item.id !== id
+          (
+            item
+          ) =>
+            item.id !==
+            id
         )
     );
   }
 
   return (
     <section className="rounded-xl border bg-card">
-      {/* ==================================================
-          CABEÇALHO
-      =================================================== */}
+      {/* CABEÇALHO */}
 
       <div className="border-b px-6 py-5">
         <div className="flex items-center gap-3">
@@ -667,9 +1144,7 @@ function limparTestemunhasStatus() {
       </div>
 
       <div className="divide-y">
-        {/* ==================================================
-            ADVOGADO
-        =================================================== */}
+        {/* ADVOGADO */}
 
         <div className="p-6">
           <div className="flex items-center gap-2">
@@ -686,13 +1161,13 @@ function limparTestemunhasStatus() {
             </div>
           </div>
 
-          {/* ID QUE SERÁ ENVIADO À DILIGÊNCIA */}
-
           <input
             type="hidden"
             name="correspondente_id"
             value={
-              advogado?.id ?? ""
+              advogado
+                ?.id ??
+              ""
             }
           />
 
@@ -707,19 +1182,36 @@ function limparTestemunhasStatus() {
                   <input
                     type="text"
                     inputMode="numeric"
-                    value={oabNumero}
-                    disabled={disabled}
-                    onChange={(event) => {
+                    value={
+                      oabNumero
+                    }
+                    disabled={
+                      disabled
+                    }
+                    onChange={(
+                      event
+                    ) => {
                       setOabNumero(
-                        event.target.value
+                        event
+                          .target
+                          .value
                       );
 
                       setAdvogadoNaoEncontrado(
                         false
                       );
 
-                      setErroAdvogado("");
-                      setMensagemAdvogado("");
+                      setAdvogadoDesativado(
+                        null
+                      );
+
+                      setErroAdvogado(
+                        ""
+                      );
+
+                      setMensagemAdvogado(
+                        ""
+                      );
                     }}
                     placeholder="Ex.: 12345"
                     className="mt-2 w-full rounded-lg border bg-background px-3 py-2.5 text-sm disabled:bg-muted"
@@ -733,20 +1225,40 @@ function limparTestemunhasStatus() {
 
                   <input
                     type="text"
-                    maxLength={2}
-                    value={oabUf}
-                    disabled={disabled}
-                    onChange={(event) => {
+                    maxLength={
+                      2
+                    }
+                    value={
+                      oabUf
+                    }
+                    disabled={
+                      disabled
+                    }
+                    onChange={(
+                      event
+                    ) => {
                       setOabUf(
-                        event.target.value.toUpperCase()
+                        event
+                          .target
+                          .value
+                          .toUpperCase()
                       );
 
                       setAdvogadoNaoEncontrado(
                         false
                       );
 
-                      setErroAdvogado("");
-                      setMensagemAdvogado("");
+                      setAdvogadoDesativado(
+                        null
+                      );
+
+                      setErroAdvogado(
+                        ""
+                      );
+
+                      setMensagemAdvogado(
+                        ""
+                      );
                     }}
                     placeholder="PE"
                     className="mt-2 w-full rounded-lg border bg-background px-3 py-2.5 text-sm uppercase disabled:bg-muted"
@@ -776,49 +1288,122 @@ function limparTestemunhasStatus() {
                 </div>
               </div>
 
-              {advogadoNaoEncontrado && (
-                <div className="mt-4 rounded-lg border bg-muted/30 p-4">
-                  <p className="text-sm font-medium">
-                    Advogado não cadastrado
-                  </p>
+              {advogadoDesativado && (
+                <div className="mt-4 rounded-xl border-2 border-amber-400 bg-amber-50 p-5">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-100">
+                      <RotateCcw className="h-5 w-5 text-amber-800" />
+                    </div>
 
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Informe o nome para cadastrá-lo e vinculá-lo à diligência.
-                  </p>
+                    <div className="flex-1">
+                      <p className="font-semibold text-amber-950">
+                        Este advogado já está cadastrado
+                      </p>
 
-                  <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-                    <input
-                      type="text"
-                      value={
-                        nomeNovoAdvogado
-                      }
-                      disabled={disabled}
-                      onChange={(event) =>
-                        setNomeNovoAdvogado(
-                          event.target.value
-                        )
-                      }
-                      placeholder="Nome do advogado"
-                      className="flex-1 rounded-lg border bg-background px-3 py-2.5 text-sm disabled:bg-muted"
-                    />
+                      <p className="mt-1 text-sm font-medium text-amber-900">
+                        O cadastro está atualmente desativado.
+                      </p>
 
-                    <button
-                      type="button"
-                      disabled={
-                        disabled ||
-                        carregandoAdvogado
-                      }
-                      onClick={
-                        handleCadastrarAdvogado
-                      }
-                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#0b1f3a] px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50"
-                    >
-                      <UserPlus className="h-4 w-4" />
-                      Cadastrar e vincular
-                    </button>
+                      <div className="mt-4 rounded-lg border border-amber-200 bg-white/70 px-4 py-3">
+                        <p className="font-semibold">
+                          {
+                            advogadoDesativado
+                              .nome
+                          }
+                        </p>
+
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          OAB/
+                          {
+                            advogadoDesativado
+                              .oab_uf
+                          }{" "}
+                          {
+                            advogadoDesativado
+                              .oab_numero
+                          }
+                        </p>
+                      </div>
+
+                      <p className="mt-4 text-sm text-amber-900">
+                        Não é necessário realizar um novo cadastro. Reative o registro existente para utilizá-lo nesta diligência.
+                      </p>
+
+                      <button
+                        type="button"
+                        disabled={
+                          disabled ||
+                          carregandoAdvogado
+                        }
+                        onClick={
+                          handleReativarAdvogado
+                        }
+                        className="mt-4 inline-flex items-center justify-center gap-2 rounded-lg bg-[#0b1f3a] px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50"
+                      >
+                        {carregandoAdvogado ? (
+                          <LoaderCircle className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <RotateCcw className="h-4 w-4" />
+                        )}
+
+                        Reativar e vincular
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
+
+              {advogadoNaoEncontrado &&
+                !advogadoDesativado && (
+                  <div className="mt-4 rounded-lg border bg-muted/30 p-4">
+                    <p className="text-sm font-medium">
+                      Advogado não cadastrado
+                    </p>
+
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Não encontramos nenhum advogado com esta OAB e UF. Informe o nome para cadastrá-lo e vinculá-lo à diligência.
+                    </p>
+
+                    <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                      <input
+                        type="text"
+                        value={
+                          nomeNovoAdvogado
+                        }
+                        disabled={
+                          disabled
+                        }
+                        onChange={(
+                          event
+                        ) =>
+                          setNomeNovoAdvogado(
+                            event
+                              .target
+                              .value
+                          )
+                        }
+                        placeholder="Nome do advogado"
+                        className="flex-1 rounded-lg border bg-background px-3 py-2.5 text-sm disabled:bg-muted"
+                      />
+
+                      <button
+                        type="button"
+                        disabled={
+                          disabled ||
+                          carregandoAdvogado
+                        }
+                        onClick={
+                          handleCadastrarAdvogado
+                        }
+                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#0b1f3a] px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50"
+                      >
+                        <UserPlus className="h-4 w-4" />
+
+                        Cadastrar e vincular
+                      </button>
+                    </div>
+                  </div>
+                )}
             </>
           )}
 
@@ -829,13 +1414,22 @@ function limparTestemunhasStatus() {
 
                 <div>
                   <p className="font-semibold">
-                    {advogado.nome}
+                    {
+                      advogado
+                        .nome
+                    }
                   </p>
 
                   <p className="mt-1 text-sm text-emerald-900">
                     OAB/
-                    {advogado.oab_uf}{" "}
-                    {advogado.oab_numero}
+                    {
+                      advogado
+                        .oab_uf
+                    }{" "}
+                    {
+                      advogado
+                        .oab_numero
+                    }
                   </p>
                 </div>
               </div>
@@ -843,7 +1437,9 @@ function limparTestemunhasStatus() {
               {!disabled && (
                 <button
                   type="button"
-                  onClick={limparAdvogado}
+                  onClick={
+                    limparAdvogado
+                  }
                   className="text-sm font-medium text-muted-foreground hover:text-foreground"
                 >
                   Alterar
@@ -854,20 +1450,22 @@ function limparTestemunhasStatus() {
 
           {mensagemAdvogado && (
             <p className="mt-3 text-sm text-muted-foreground">
-              {mensagemAdvogado}
+              {
+                mensagemAdvogado
+              }
             </p>
           )}
 
           {erroAdvogado && (
             <p className="mt-3 text-sm font-medium text-red-700">
-              {erroAdvogado}
+              {
+                erroAdvogado
+              }
             </p>
           )}
         </div>
 
-        {/* ==================================================
-            PREPOSTO
-        =================================================== */}
+        {/* PREPOSTO */}
 
         <div className="p-6">
           <div className="flex items-center gap-2">
@@ -895,9 +1493,11 @@ function limparTestemunhasStatus() {
                 name="necessita_preposto"
                 value="true"
                 required
-                disabled={disabled}
+                disabled={
+                  disabled
+                }
                 checked={
-                  necessitaPrepostoEfetivo ===
+                  necessitaPreposto ===
                   "true"
                 }
                 onChange={() =>
@@ -916,9 +1516,11 @@ function limparTestemunhasStatus() {
                 name="necessita_preposto"
                 value="false"
                 required
-                disabled={disabled}
+                disabled={
+                  disabled
+                }
                 checked={
-                  necessitaPrepostoEfetivo ===
+                  necessitaPreposto ===
                   "false"
                 }
                 onChange={() =>
@@ -936,11 +1538,13 @@ function limparTestemunhasStatus() {
             type="hidden"
             name="preposto_id"
             value={
-              preposto?.id ?? ""
+              preposto
+                ?.id ??
+              ""
             }
           />
 
-          {necessitaPrepostoEfetivo ===
+          {necessitaPreposto ===
             "true" && (
             <div className="mt-5">
               {!preposto && (
@@ -954,22 +1558,36 @@ function limparTestemunhasStatus() {
                       <input
                         type="text"
                         inputMode="numeric"
-                        value={cpfPreposto}
-                        disabled={disabled}
-                        onChange={(event) => {
+                        value={
+                          cpfPreposto
+                        }
+                        disabled={
+                          disabled
+                        }
+                        onChange={(
+                          event
+                        ) => {
                           setCpfPreposto(
-                            event.target.value
+                            event
+                              .target
+                              .value
                           );
 
                           setPrepostoNaoEncontrado(
                             false
                           );
 
+                          setPrepostoDesativado(
+                            null
+                          );
+
                           setMensagemPreposto(
                             ""
                           );
 
-                          setErroPreposto("");
+                          setErroPreposto(
+                            ""
+                          );
                         }}
                         placeholder="000.000.000-00"
                         className="mt-2 w-full rounded-lg border bg-background px-3 py-2.5 text-sm disabled:bg-muted"
@@ -999,48 +1617,114 @@ function limparTestemunhasStatus() {
                     </div>
                   </div>
 
-                  {prepostoNaoEncontrado && (
-                    <div className="mt-4 rounded-lg border bg-muted/30 p-4">
-                      <p className="text-sm font-medium">
-                        Preposto não cadastrado
-                      </p>
+                  {prepostoDesativado && (
+                    <div className="mt-4 rounded-xl border-2 border-amber-400 bg-amber-50 p-5">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-100">
+                          <RotateCcw className="h-5 w-5 text-amber-800" />
+                        </div>
 
-                      <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-                        <input
-                          type="text"
-                          value={
-                            nomeNovoPreposto
-                          }
-                          disabled={
-                            disabled
-                          }
-                          onChange={(event) =>
-                            setNomeNovoPreposto(
-                              event.target
-                                .value
-                            )
-                          }
-                          placeholder="Nome do preposto"
-                          className="flex-1 rounded-lg border bg-background px-3 py-2.5 text-sm disabled:bg-muted"
-                        />
+                        <div className="flex-1">
+                          <p className="font-semibold text-amber-950">
+                            Este preposto já está cadastrado
+                          </p>
 
-                        <button
-                          type="button"
-                          disabled={
-                            disabled ||
-                            carregandoPreposto
-                          }
-                          onClick={
-                            handleCadastrarPreposto
-                          }
-                          className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#0b1f3a] px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50"
-                        >
-                          <UserPlus className="h-4 w-4" />
-                          Cadastrar e vincular
-                        </button>
+                          <p className="mt-1 text-sm font-medium text-amber-900">
+                            O cadastro está atualmente desativado.
+                          </p>
+
+                          <div className="mt-4 rounded-lg border border-amber-200 bg-white/70 px-4 py-3">
+                            <p className="font-semibold">
+                              {
+                                prepostoDesativado
+                                  .nome
+                              }
+                            </p>
+
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              CPF{" "}
+                              {formatarCPF(
+                                prepostoDesativado
+                                  .cpf
+                              )}
+                            </p>
+                          </div>
+
+                          <p className="mt-4 text-sm text-amber-900">
+                            Não é necessário realizar um novo cadastro. Reative o registro existente para utilizá-lo nesta diligência.
+                          </p>
+
+                          <button
+                            type="button"
+                            disabled={
+                              disabled ||
+                              carregandoPreposto
+                            }
+                            onClick={
+                              handleReativarPreposto
+                            }
+                            className="mt-4 inline-flex items-center justify-center gap-2 rounded-lg bg-[#0b1f3a] px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50"
+                          >
+                            {carregandoPreposto ? (
+                              <LoaderCircle className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <RotateCcw className="h-4 w-4" />
+                            )}
+
+                            Reativar e vincular
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}
+
+                  {prepostoNaoEncontrado &&
+                    !prepostoDesativado && (
+                      <div className="mt-4 rounded-lg border bg-muted/30 p-4">
+                        <p className="text-sm font-medium">
+                          Preposto não cadastrado
+                        </p>
+
+                        <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                          <input
+                            type="text"
+                            value={
+                              nomeNovoPreposto
+                            }
+                            disabled={
+                              disabled
+                            }
+                            onChange={(
+                              event
+                            ) =>
+                              setNomeNovoPreposto(
+                                event
+                                  .target
+                                  .value
+                              )
+                            }
+                            placeholder="Nome do preposto"
+                            className="flex-1 rounded-lg border bg-background px-3 py-2.5 text-sm disabled:bg-muted"
+                          />
+
+                          <button
+                            type="button"
+                            disabled={
+                              disabled ||
+                              carregandoPreposto
+                            }
+                            onClick={
+                              handleCadastrarPreposto
+                            }
+                            className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#0b1f3a] px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50"
+                          >
+                            <UserPlus className="h-4 w-4" />
+
+                            Cadastrar e vincular
+                          </button>
+                        </div>
+                      </div>
+                    )}
                 </>
               )}
 
@@ -1051,13 +1735,17 @@ function limparTestemunhasStatus() {
 
                     <div>
                       <p className="font-semibold">
-                        {preposto.nome}
+                        {
+                          preposto
+                            .nome
+                        }
                       </p>
 
                       <p className="mt-1 text-sm text-emerald-900">
                         CPF{" "}
                         {formatarCPF(
-                          preposto.cpf
+                          preposto
+                            .cpf
                         )}
                       </p>
                     </div>
@@ -1079,22 +1767,24 @@ function limparTestemunhasStatus() {
 
               {mensagemPreposto && (
                 <p className="mt-3 text-sm text-muted-foreground">
-                  {mensagemPreposto}
+                  {
+                    mensagemPreposto
+                  }
                 </p>
               )}
 
               {erroPreposto && (
                 <p className="mt-3 text-sm font-medium text-red-700">
-                  {erroPreposto}
+                  {
+                    erroPreposto
+                  }
                 </p>
               )}
             </div>
           )}
         </div>
 
-        {/* ==================================================
-            TESTEMUNHAS
-        =================================================== */}
+        {/* TESTEMUNHAS */}
 
         <div className="p-6">
           <div className="flex items-center gap-2">
@@ -1112,108 +1802,79 @@ function limparTestemunhasStatus() {
           </div>
 
           <p className="mt-5 text-sm font-medium">
-  Testemunhas
-</p>
+            Há testemunhas confirmadas? *
+          </p>
 
-<p className="mt-1 text-sm text-muted-foreground">
-  Sem seleção, a definição das
-  testemunhas será considerada
-  pendente.
-</p>
+          <div className="mt-3 flex gap-6">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="testemunhas_confirmadas"
+                value="true"
+                required
+                disabled={
+                  disabled
+                }
+                checked={
+                  testemunhasConfirmadas ===
+                  "true"
+                }
+                onChange={() =>
+                  alterarTestemunhasConfirmadas(
+                    "true"
+                  )
+                }
+              />
 
-<div className="mt-3 flex flex-wrap gap-6">
-  <label className="flex items-center gap-2 text-sm">
-    <input
-      type="radio"
-      name="testemunhas_status"
-      value="confirmadas"
-      disabled={disabled}
-      checked={
-        testemunhasStatus ===
-        "confirmadas"
-      }
-      onChange={() =>
-        alterarTestemunhasStatus(
-          "confirmadas"
-        )
-      }
-    />
+              Sim
+            </label>
 
-    Sim
-  </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="testemunhas_confirmadas"
+                value="false"
+                required
+                disabled={
+                  disabled
+                }
+                checked={
+                  testemunhasConfirmadas ===
+                  "false"
+                }
+                onChange={() =>
+                  alterarTestemunhasConfirmadas(
+                    "false"
+                  )
+                }
+              />
 
-  <label className="flex items-center gap-2 text-sm">
-    <input
-      type="radio"
-      name="testemunhas_status"
-      value="desnecessarias"
-      disabled={disabled}
-      checked={
-        testemunhasStatus ===
-        "desnecessarias"
-      }
-      onChange={() =>
-        alterarTestemunhasStatus(
-          "desnecessarias"
-        )
-      }
-    />
-
-    Desnecessárias
-  </label>
-</div>
-
-{!disabled && (
-  <button
-    type="button"
-    disabled={
-      testemunhasStatus === ""
-    }
-    onClick={
-      limparTestemunhasStatus
-    }
-    className="mt-3 text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline disabled:cursor-not-allowed disabled:opacity-40"
-  >
-    Limpar seleção
-  </button>
-)}
-
-<input
-  type="hidden"
-  name="testemunhas_confirmadas"
-  value={
-    testemunhasStatus ===
-    "confirmadas"
-      ? "true"
-      : testemunhasStatus ===
-          "desnecessarias"
-        ? "false"
-        : ""
-  }
-/>
-
-          {/* IDs enviados ao backend */}
+              Não
+            </label>
+          </div>
 
           {testemunhas.map(
-            (testemunha) => (
+            (
+              testemunha
+            ) => (
               <input
                 key={
-                  testemunha.id
+                  testemunha
+                    .id
                 }
                 type="hidden"
                 name="testemunha_ids"
                 value={
-                  testemunha.id
+                  testemunha
+                    .id
                 }
               />
             )
           )}
 
-          {testemunhasStatus ===
-            "confirmadas" && (
+          {testemunhasConfirmadas ===
+            "true" && (
             <div className="mt-5">
-              {/* TESTEMUNHAS JÁ ADICIONADAS */}
-
               {testemunhas.length >
                 0 && (
                 <div className="mb-5 space-y-3">
@@ -1227,21 +1888,24 @@ function limparTestemunhasStatus() {
                     ) => (
                       <div
                         key={
-                          testemunha.id
+                          testemunha
+                            .id
                         }
                         className="flex items-center justify-between gap-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4"
                       >
                         <div>
                           <p className="font-semibold">
                             {
-                              testemunha.nome
+                              testemunha
+                                .nome
                             }
                           </p>
 
                           <p className="mt-1 text-sm text-emerald-900">
                             CPF{" "}
                             {formatarCPF(
-                              testemunha.cpf
+                              testemunha
+                                .cpf
                             )}
                           </p>
                         </div>
@@ -1251,12 +1915,14 @@ function limparTestemunhasStatus() {
                             type="button"
                             onClick={() =>
                               removerTestemunha(
-                                testemunha.id
+                                testemunha
+                                  .id
                               )
                             }
                             className="inline-flex items-center gap-1 text-sm font-medium text-red-700"
                           >
                             <X className="h-4 w-4" />
+
                             Remover
                           </button>
                         )}
@@ -1265,8 +1931,6 @@ function limparTestemunhasStatus() {
                   )}
                 </div>
               )}
-
-              {/* BUSCA DE NOVA TESTEMUNHA */}
 
               <div className="flex flex-col gap-3 sm:flex-row">
                 <div className="flex-1">
@@ -1280,10 +1944,16 @@ function limparTestemunhasStatus() {
                     value={
                       cpfTestemunha
                     }
-                    disabled={disabled}
-                    onChange={(event) => {
+                    disabled={
+                      disabled
+                    }
+                    onChange={(
+                      event
+                    ) => {
                       setCpfTestemunha(
-                        event.target.value
+                        event
+                          .target
+                          .value
                       );
 
                       setTestemunhaNaoEncontrada(
@@ -1342,10 +2012,16 @@ function limparTestemunhasStatus() {
                       value={
                         nomeNovaTestemunha
                       }
-                      disabled={disabled}
-                      onChange={(event) =>
+                      disabled={
+                        disabled
+                      }
+                      onChange={(
+                        event
+                      ) =>
                         setNomeNovaTestemunha(
-                          event.target.value
+                          event
+                            .target
+                            .value
                         )
                       }
                       placeholder="Nome da testemunha"
@@ -1364,6 +2040,7 @@ function limparTestemunhasStatus() {
                       className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#0b1f3a] px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50"
                     >
                       <UserPlus className="h-4 w-4" />
+
                       Cadastrar e adicionar
                     </button>
                   </div>
@@ -1372,13 +2049,17 @@ function limparTestemunhasStatus() {
 
               {mensagemTestemunha && (
                 <p className="mt-3 text-sm text-muted-foreground">
-                  {mensagemTestemunha}
+                  {
+                    mensagemTestemunha
+                  }
                 </p>
               )}
 
               {erroTestemunha && (
                 <p className="mt-3 text-sm font-medium text-red-700">
-                  {erroTestemunha}
+                  {
+                    erroTestemunha
+                  }
                 </p>
               )}
             </div>

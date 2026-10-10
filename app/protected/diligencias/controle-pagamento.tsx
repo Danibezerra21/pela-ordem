@@ -9,7 +9,9 @@ import {
 } from "react-dom";
 
 import {
+  AlertTriangle,
   Check,
+  Clock3,
   Loader2,
   RotateCcw,
 } from "lucide-react";
@@ -24,10 +26,19 @@ type ControlePagamentoProps = {
   contratacaoId:
     string;
 
+  diligenciaId:
+    string;
+
   pagoEm:
     string | null;
 
+  pagamentoDesfeitoEm:
+    string | null;
+
   podeGerenciar:
+    boolean;
+
+  liberadoParaPagamento:
     boolean;
 };
 
@@ -48,7 +59,6 @@ function BotaoPagamento({
   pago:
     boolean;
 }) {
-
   const {
     pending,
   } =
@@ -59,7 +69,9 @@ function BotaoPagamento({
     return (
       <button
         type="submit"
-        disabled={pending}
+        disabled={
+          pending
+        }
         className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {pending ? (
@@ -83,7 +95,9 @@ function BotaoPagamento({
   return (
     <button
       type="submit"
-      disabled={pending}
+      disabled={
+        pending
+      }
       className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#0b1f3a] px-3 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
     >
       {pending ? (
@@ -104,7 +118,7 @@ function BotaoPagamento({
 }
 
 
-function formatarPagamento(
+function formatarDataHora(
   valor: string
 ) {
   const data =
@@ -126,7 +140,7 @@ function formatarPagamento(
     "pt-BR",
     {
       timeZone:
-        "America/Recife",
+        "America/Sao_Paulo",
 
       day:
         "2-digit",
@@ -142,6 +156,9 @@ function formatarPagamento(
 
       minute:
         "2-digit",
+
+      hour12:
+        false,
     }
   ).format(
     data
@@ -151,8 +168,11 @@ function formatarPagamento(
 
 export function ControlePagamento({
   contratacaoId,
+  diligenciaId,
   pagoEm,
+  pagamentoDesfeitoEm,
   podeGerenciar,
+  liberadoParaPagamento,
 }: ControlePagamentoProps) {
 
   const [
@@ -171,8 +191,18 @@ export function ControlePagamento({
     );
 
 
+  const possuiDesfazimento =
+    Boolean(
+      pagamentoDesfeitoEm
+    );
+
+
   return (
     <div className="flex flex-col items-start gap-2">
+
+      {/* =================================================
+          ESTADO ATUAL
+      ================================================= */}
 
       {pago ? (
         <div>
@@ -185,51 +215,137 @@ export function ControlePagamento({
           {pagoEm && (
             <p className="mt-1.5 text-xs text-muted-foreground">
               Registrado em{" "}
-              {formatarPagamento(
+              {formatarDataHora(
                 pagoEm
               )}
             </p>
           )}
         </div>
-      ) : (
+
+      ) : possuiDesfazimento ? (
+
+        <div>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-800">
+            <RotateCcw className="h-3.5 w-3.5" />
+
+            Pagamento desfeito
+          </span>
+
+          {pagamentoDesfeitoEm && (
+            <p className="mt-1.5 text-xs text-red-700">
+              Desfeito em{" "}
+              {formatarDataHora(
+                pagamentoDesfeitoEm
+              )}
+            </p>
+          )}
+        </div>
+
+      ) : liberadoParaPagamento ? (
+
         <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800">
           Pagamento pendente
         </span>
+
+      ) : (
+
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+          <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+            <Clock3 className="h-4 w-4" />
+
+            Aguardando liberação para pagamento
+          </div>
+
+          <p className="mt-1 max-w-xs text-xs text-muted-foreground">
+            O desfecho da diligência ainda não autorizou o pagamento.
+          </p>
+        </div>
       )}
 
 
-      {podeGerenciar && (
-        <form
-          action={
-            formAction
-          }
-        >
-          <input
-            type="hidden"
-            name="contratacao_id"
-            value={
-              contratacaoId
-            }
-          />
+      {/* =================================================
+          ALERTA DE HISTÓRICO
 
-          <input
-            type="hidden"
-            name="pago"
-            value={
-              pago
-                ? "false"
-                : "true"
-            }
-          />
+          Continua aparecendo mesmo se a contratação
+          tiver sido paga novamente.
+      ================================================= */}
 
-          <BotaoPagamento
-            pago={
-              pago
-            }
-          />
-        </form>
-      )}
+      {pago &&
+        possuiDesfazimento &&
+        pagamentoDesfeitoEm && (
+          <div className="mt-1 max-w-sm rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
 
+              <div>
+                <p className="text-xs font-semibold text-amber-900">
+                  Este pagamento já foi desfeito anteriormente.
+                </p>
+
+                <p className="mt-1 text-xs text-amber-800">
+                  Último desfazimento em{" "}
+                  {formatarDataHora(
+                    pagamentoDesfeitoEm
+                  )}.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+
+      {/* =================================================
+          AÇÃO FINANCEIRA
+      ================================================= */}
+
+      {podeGerenciar &&
+        (
+          pago ||
+          liberadoParaPagamento
+        ) && (
+          <form
+            action={
+              formAction
+            }
+          >
+            <input
+              type="hidden"
+              name="contratacao_id"
+              value={
+                contratacaoId
+              }
+            />
+
+            <input
+              type="hidden"
+              name="diligencia_id"
+              value={
+                diligenciaId
+              }
+            />
+
+            <input
+              type="hidden"
+              name="pago"
+              value={
+                pago
+                  ? "false"
+                  : "true"
+              }
+            />
+
+            <BotaoPagamento
+              pago={
+                pago
+              }
+            />
+          </form>
+        )}
+
+
+      {/* =================================================
+          RETORNOS
+      ================================================= */}
 
       {estado.status ===
         "erro" &&
