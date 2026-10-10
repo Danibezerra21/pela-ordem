@@ -22,7 +22,6 @@ export default async function ProtectedLayout({
   children:
     React.ReactNode;
 }) {
-
   const supabase =
     await createClient();
 
@@ -91,39 +90,40 @@ export default async function ProtectedLayout({
   }
 
 
+  if (
+    !membro
+  ) {
+    redirect(
+      "/auth/onboarding"
+    );
+  }
+
+
   let tipoAcesso:
-    TipoAcessoSidebar =
-    "sem_vinculo";
+    TipoAcessoSidebar;
 
 
   if (
-    membro
+    membro.papel ===
+    "master"
   ) {
-
-    if (
-      membro.papel ===
-      "master"
-    ) {
-      tipoAcesso =
-        "master";
-    } else if (
-      membro.nucleo ===
-      "financeiro"
-    ) {
-      tipoAcesso =
-        "financeiro";
-    } else {
-      tipoAcesso =
-        "operacional";
-    }
+    tipoAcesso =
+      "master";
+  } else if (
+    membro.nucleo ===
+    "financeiro"
+  ) {
+    tipoAcesso =
+      "financeiro";
+  } else {
+    tipoAcesso =
+      "operacional";
   }
 
 
   return (
     <div className="min-h-screen bg-background">
-
       <div className="flex min-h-screen">
-
         <Suspense fallback={null}>
           <Sidebar
             tipoAcesso={
@@ -134,15 +134,11 @@ export default async function ProtectedLayout({
 
 
         <div className="min-w-0 flex-1">
-
           <main className="mx-auto w-full max-w-7xl px-8 py-10">
             {children}
           </main>
-
         </div>
-
       </div>
-
     </div>
   );
 }
