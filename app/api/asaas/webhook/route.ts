@@ -62,6 +62,8 @@ type SubscriptionPayload = {
 
   externalReference?: string | null;
 
+  checkoutSession?: string | null;
+
 };
 
 
@@ -1637,34 +1639,311 @@ export async function POST(
 
         /*
 
-         * Primeira vez que recebemos
-
-         * esta assinatura.
+         * Primeira vez que recebemos esta assinatura.
 
          *
 
-         * Localizamos a empresa pelo
+         * O Asaas Checkout não replica o externalReference do Checkout
 
-         * customer criado pelo Checkout.
+         * para a assinatura, mas envia subscription.checkoutSession.
+
+         * Esse campo contém o asaas_checkout_id e é o vínculo mais
+
+         * seguro entre a assinatura criada e a contratação interna.
+
+         *
+
+         * O customer fica como fallback para integrações antigas ou
+
+         * eventos em que checkoutSession não esteja disponível.
 
          */
 
+        let contratacao:
+
+          {
+
+            id: string;
+
+            empresa_id: string;
+
+            plano_codigo: string;
+
+            ciclo_snapshot: string;
+
+            valor_snapshot: number | string;
+
+            primeira_cobranca_em: string | null;
+
+          }
+
+          | null =
+
+          null;
+
+
+
+
         if (
 
-          !assinaturaAsaas
+          assinaturaAsaas.checkoutSession
 
-            .customer
+        ) {
+
+          const {
+
+            data:
+
+              contratacaoPorCheckout,
+
+            error:
+
+              erroContratacaoPorCheckout,
+
+          } =
+
+            await admin
+
+              .from(
+
+                "contratacoes_checkout"
+
+              )
+
+              .select(`
+
+                id,
+
+                empresa_id,
+
+                plano_codigo,
+
+                ciclo_snapshot,
+
+                valor_snapshot,
+
+                primeira_cobranca_em
+
+              `)
+
+              .eq(
+
+                "asaas_checkout_id",
+
+                assinaturaAsaas.checkoutSession
+
+              )
+
+              .maybeSingle();
+
+
+
+
+          if (
+
+            erroContratacaoPorCheckout
+
+          ) {
+
+            throw erroContratacaoPorCheckout;
+
+          }
+
+
+
+
+          contratacao =
+
+            contratacaoPorCheckout;
+
+        }
+
+
+
+
+        if (
+
+          !contratacao &&
+
+          assinaturaAsaas.customer
+
+        ) {
+
+          const {
+
+            data:
+
+              contaPorCustomer,
+
+            error:
+
+              erroContaPorCustomer,
+
+          } =
+
+            await admin
+
+              .from(
+
+                "contas_comerciais"
+
+              )
+
+              .select(
+
+                "id, empresa_id"
+
+              )
+
+              .eq(
+
+                "asaas_customer_id",
+
+                assinaturaAsaas.customer
+
+              )
+
+              .maybeSingle();
+
+
+
+
+          if (
+
+            erroContaPorCustomer
+
+          ) {
+
+            throw erroContaPorCustomer;
+
+          }
+
+
+
+
+          if (
+
+            contaPorCustomer
+
+          ) {
+
+            const {
+
+              data:
+
+                contratacaoPorEmpresa,
+
+              error:
+
+                erroContratacaoPorEmpresa,
+
+            } =
+
+              await admin
+
+                .from(
+
+                  "contratacoes_checkout"
+
+                )
+
+                .select(`
+
+                  id,
+
+                  empresa_id,
+
+                  plano_codigo,
+
+                  ciclo_snapshot,
+
+                  valor_snapshot,
+
+                  primeira_cobranca_em
+
+                `)
+
+                .eq(
+
+                  "empresa_id",
+
+                  contaPorCustomer.empresa_id
+
+                )
+
+                .eq(
+
+                  "status",
+
+                  "pago"
+
+                )
+
+                .order(
+
+                  "concluida_em",
+
+                  {
+
+                    ascending:
+
+                      false,
+
+                  }
+
+                )
+
+                .limit(1)
+
+                .maybeSingle();
+
+
+
+
+            if (
+
+              erroContratacaoPorEmpresa
+
+            ) {
+
+              throw erroContratacaoPorEmpresa;
+
+            }
+
+
+
+
+            contratacao =
+
+              contratacaoPorEmpresa;
+
+          }
+
+        }
+
+
+
+
+        if (
+
+          !contratacao
 
         ) {
 
           throw new Error(
 
-            "Assinatura sem customer."
+            "Contratação vinculada à assinatura ainda não localizada."
 
           );
 
         }
 
+
+
+
+        empresaId =
+
+          contratacao.empresa_id;
 
 
 
@@ -1691,20 +1970,19 @@ export async function POST(
 
             .select(
 
-              "id, empresa_id"
+              "id, empresa_id, asaas_customer_id"
 
             )
 
             .eq(
 
-              "asaas_customer_id",
+              "empresa_id",
 
-              assinaturaAsaas.customer
+              empresaId
 
             )
 
             .maybeSingle();
-
 
 
 
@@ -1719,112 +1997,71 @@ export async function POST(
 
           throw new Error(
 
-            "Conta comercial da assinatura ainda não localizada."
+            "Conta comercial da assinatura não localizada."
 
           );
 
         }
-
-
-
-
-
-        empresaId =
-
-          conta.empresa_id;
-
-
-
-
-
-        const {
-
-          data:
-
-            contratacao,
-
-          error:
-
-            erroContratacao,
-
-        } =
-
-          await admin
-
-            .from(
-
-              "contratacoes_checkout"
-
-            )
-
-            .select(`
-
-              id,
-
-              plano_codigo,
-
-              ciclo_snapshot,
-
-              valor_snapshot,
-
-              primeira_cobranca_em
-
-            `)
-
-            .eq(
-
-              "empresa_id",
-
-              empresaId
-
-            )
-
-            .eq(
-
-              "status",
-
-              "pago"
-
-            )
-
-            .order(
-
-              "concluida_em",
-
-              {
-
-                ascending:
-
-                  false,
-
-              }
-
-            )
-
-            .limit(1)
-
-            .maybeSingle();
-
 
 
 
 
         if (
 
-          erroContratacao ||
+          assinaturaAsaas.customer &&
 
-          !contratacao
+          conta.asaas_customer_id !==
+
+            assinaturaAsaas.customer
 
         ) {
 
-          throw new Error(
+          const {
 
-            "Contratação vinculada à assinatura não localizada."
+            error:
 
-          );
+              erroVinculoCustomer,
+
+          } =
+
+            await admin
+
+              .from(
+
+                "contas_comerciais"
+
+              )
+
+              .update({
+
+                asaas_customer_id:
+
+                  assinaturaAsaas.customer,
+
+              })
+
+              .eq(
+
+                "id",
+
+                conta.id
+
+              );
+
+
+
+
+          if (
+
+            erroVinculoCustomer
+
+          ) {
+
+            throw erroVinculoCustomer;
+
+          }
 
         }
-
 
 
 
@@ -1940,7 +2177,6 @@ export async function POST(
 
 
 
-
         if (
 
           erroCriacao
@@ -1954,10 +2190,6 @@ export async function POST(
       }
 
     }
-
-
-
-
 
     /* ===================================================
 
