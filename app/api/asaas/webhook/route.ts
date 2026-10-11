@@ -336,6 +336,113 @@ function recursoEvento(
 
 
 
+function extrairMensagemErro(
+
+  error: unknown
+
+) {
+
+  if (
+
+    error instanceof Error
+
+  ) {
+
+    return error.message;
+
+  }
+
+
+
+  if (
+
+    typeof error === "object" &&
+
+    error !== null
+
+  ) {
+
+    const objeto =
+
+      error as
+
+        Record<
+
+          string,
+
+          unknown
+
+        >;
+
+
+
+    const partes = [
+
+      objeto.message,
+
+      objeto.details,
+
+      objeto.hint,
+
+      objeto.code,
+
+    ].filter(
+
+      (valor): valor is string =>
+
+        typeof valor === "string" &&
+
+        valor.trim().length > 0
+
+    );
+
+
+
+    if (partes.length > 0) {
+
+      return partes.join(" | ");
+
+    }
+
+
+
+    try {
+
+      return JSON.stringify(
+
+        error
+
+      );
+
+    } catch {
+
+      return "Erro desconhecido.";
+
+    }
+
+  }
+
+
+
+  if (
+
+    typeof error === "string"
+
+  ) {
+
+    return error;
+
+  }
+
+
+
+  return "Erro desconhecido.";
+
+}
+
+
+
+
 export async function POST(
 
   request: Request
@@ -1046,67 +1153,159 @@ export async function POST(
 
 
 
-      switch (
+      const agoraEvento =
 
-        tipoEvento
+        new Date()
+
+          .toISOString();
+
+
+
+      const statusAtual =
+
+        contratacao.status;
+
+
+
+      const statusAsaas =
+
+        checkout.status
+
+          ?.trim()
+
+          .toUpperCase();
+
+
+
+      const statusTerminalAtual =
+
+        statusAtual === "pago" ||
+
+        statusAtual === "cancelado" ||
+
+        statusAtual === "expirado";
+
+
+
+      /*
+
+       * Eventos de Checkout são entregues ao menos uma vez e
+
+       * podem chegar atrasados. Em um reenvio, CHECKOUT_CREATED
+
+       * pode trazer o estado ATUAL do Checkout no payload.
+
+       * Portanto, nunca fazemos um estado terminal retroceder
+
+       * para "ativo" e respeitamos EXPIRED/CANCELED/PAID
+
+       * quando vierem no próprio checkout.status.
+
+       */
+
+      if (
+
+        tipoEvento ===
+
+          "CHECKOUT_PAID" ||
+
+        (
+
+          tipoEvento ===
+
+            "CHECKOUT_CREATED" &&
+
+          statusAsaas ===
+
+            "PAID"
+
+        )
 
       ) {
 
-        case "CHECKOUT_CREATED":
+        atualizacao.status =
 
-          atualizacao.status =
-
-            "ativo";
-
-          break;
+          "pago";
 
 
 
-        case "CHECKOUT_PAID":
+        atualizacao.concluida_em =
 
-          atualizacao.status =
+          agoraEvento;
 
-            "pago";
+      } else if (
 
-          atualizacao.concluida_em =
+        tipoEvento ===
 
-            new Date()
+          "CHECKOUT_CANCELED" ||
 
-              .toISOString();
+        (
 
-          break;
+          tipoEvento ===
 
+            "CHECKOUT_CREATED" &&
 
+          statusAsaas ===
 
-        case "CHECKOUT_CANCELED":
+            "CANCELED"
 
-          atualizacao.status =
+        )
 
-            "cancelado";
+      ) {
 
-          atualizacao.cancelada_em =
+        atualizacao.status =
 
-            new Date()
-
-              .toISOString();
-
-          break;
+          "cancelado";
 
 
 
-        case "CHECKOUT_EXPIRED":
+        atualizacao.cancelada_em =
 
-          atualizacao.status =
+          agoraEvento;
 
-            "expirado";
+      } else if (
 
-          atualizacao.expirada_em =
+        tipoEvento ===
 
-            new Date()
+          "CHECKOUT_EXPIRED" ||
 
-              .toISOString();
+        (
 
-          break;
+          tipoEvento ===
+
+            "CHECKOUT_CREATED" &&
+
+          statusAsaas ===
+
+            "EXPIRED"
+
+        )
+
+      ) {
+
+        atualizacao.status =
+
+          "expirado";
+
+
+
+        atualizacao.expirada_em =
+
+          agoraEvento;
+
+      } else if (
+
+        tipoEvento ===
+
+          "CHECKOUT_CREATED" &&
+
+        !statusTerminalAtual
+
+      ) {
+
+        atualizacao.status =
+
+          "ativo";
 
       }
 
@@ -2638,13 +2837,11 @@ export async function POST(
 
     const mensagem =
 
-      error instanceof
+      extrairMensagemErro(
 
-        Error
+        error
 
-        ? error.message
-
-        : "Erro desconhecido.";
+      );
 
 
 
