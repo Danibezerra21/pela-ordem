@@ -13,6 +13,7 @@ type Plano = {
 
 type Props = {
   planos: Plano[];
+  planoAtualCodigo?: string | null;
 };
 
 type RespostaCheckout = {
@@ -48,7 +49,7 @@ function aguardar(milissegundos: number) {
   });
 }
 
-export function PlanosAssinatura({ planos }: Props) {
+export function PlanosAssinatura({ planos, planoAtualCodigo = null }: Props) {
   const router = useRouter();
 
   const [processando, setProcessando] = useState<string | null>(null);
@@ -194,11 +195,13 @@ export function PlanosAssinatura({ planos }: Props) {
     <section className="mt-8">
       <div className="mb-5">
         <h2 className="text-lg font-semibold text-slate-900">
-          Planos disponíveis
+          {planoAtualCodigo ? "Alterar plano" : "Planos disponíveis"}
         </h2>
 
         <p className="mt-1 text-sm text-slate-600">
-          Todos os planos incluem usuários e diligências ilimitados.
+          {planoAtualCodigo
+            ? "Seu plano atual está identificado abaixo. A mudança para outro plano será agendada para o término do período já contratado."
+            : "Todos os planos incluem usuários e diligências ilimitados."}
         </p>
       </div>
 
@@ -218,16 +221,24 @@ export function PlanosAssinatura({ planos }: Props) {
         {planos.map((plano) => {
           const anual = plano.ciclo === "anual";
           const carregando = processando === plano.codigo;
+          const planoAtual = planoAtualCodigo === plano.codigo;
 
           return (
             <div
               key={plano.codigo}
               className="relative rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
             >
-              {anual && economiaAnual && (
-                <div className="absolute right-4 top-4 rounded-full bg-slate-900 px-3 py-1 text-xs font-medium text-white">
-                  Economize {moeda(economiaAnual)}
+              {planoAtual ? (
+                <div className="absolute right-4 top-4 rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-800">
+                  Plano atual
                 </div>
+              ) : (
+                anual &&
+                economiaAnual && (
+                  <div className="absolute right-4 top-4 rounded-full bg-slate-900 px-3 py-1 text-xs font-medium text-white">
+                    Economize {moeda(economiaAnual)}
+                  </div>
+                )
               )}
 
               <div className="text-sm font-medium uppercase tracking-wide text-slate-500">
@@ -262,15 +273,21 @@ export function PlanosAssinatura({ planos }: Props) {
 
               <button
                 type="button"
-                disabled={processando !== null}
+                disabled={processando !== null || planoAtual}
                 onClick={() => contratar(plano.codigo)}
                 className="mt-6 w-full rounded-lg bg-slate-900 px-4 py-3 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {carregando
-                  ? "Abrindo ambiente seguro..."
-                  : anual
-                    ? "Contratar plano anual"
-                    : "Contratar plano mensal"}
+                {planoAtual
+                  ? "Plano atual"
+                  : carregando
+                    ? "Abrindo ambiente seguro..."
+                    : planoAtualCodigo
+                      ? anual
+                        ? "Alterar para plano anual"
+                        : "Alterar para plano mensal"
+                      : anual
+                        ? "Contratar plano anual"
+                        : "Contratar plano mensal"}
               </button>
             </div>
           );
@@ -278,9 +295,9 @@ export function PlanosAssinatura({ planos }: Props) {
       </div>
 
       <p className="mt-4 text-xs leading-5 text-slate-500">
-        O pagamento é realizado em ambiente seguro do Asaas. Durante o
-        período gratuito, a primeira cobrança seguirá a data indicada na sua
-        contratação.
+        {planoAtualCodigo
+          ? "A alteração para outro plano é programada para o término do período já contratado, sem nova cobrança imediata."
+          : "O pagamento é realizado em ambiente seguro do Asaas. O teste gratuito não exige cartão; ao contratar um plano, o período gratuito é encerrado e a primeira cobrança é realizada no ato da contratação."}
       </p>
     </section>
   );

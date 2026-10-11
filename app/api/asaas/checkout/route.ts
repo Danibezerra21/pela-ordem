@@ -634,18 +634,15 @@ export async function POST(request: Request) {
 
   /* =====================================================
      PRIMEIRA COBRANÇA
+
+     Regra comercial do NOTE LITIS:
+     o teste gratuito existe somente enquanto o cliente
+     ainda não contratou. Ao concluir uma contratação,
+     a primeira cobrança é devida no mesmo dia.
   ===================================================== */
 
   const agora = new Date();
-  let primeiraCobranca = agora;
-
-  if (conta.status_comercial === "teste" && conta.teste_fim) {
-    const fimTeste = new Date(conta.teste_fim);
-
-    if (fimTeste.getTime() > agora.getTime()) {
-      primeiraCobranca = fimTeste;
-    }
-  }
+  const primeiraCobranca = agora;
 
   const primeiraCobrancaEm = formatarDataRecife(primeiraCobranca);
   const primeiraCobrancaAsaas = formatarDataHoraRecife(primeiraCobranca);

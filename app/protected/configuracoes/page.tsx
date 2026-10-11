@@ -200,7 +200,7 @@ function diasRestantes(
     return null;
   }
 
-  const hojeRecife =
+  const formatador =
     new Intl.DateTimeFormat(
       "en-CA",
       {
@@ -210,77 +210,41 @@ function diasRestantes(
         month: "2-digit",
         day: "2-digit",
       }
-    ).format(
+    );
+
+  const hojeTexto =
+    formatador.format(
       new Date()
     );
 
-  const fimRecife =
-    new Intl.DateTimeFormat(
-      "en-CA",
-      {
-        timeZone:
-          "America/Recife",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-      }
-    ).format(
+  const fimTexto =
+    formatador.format(
       new Date(fim)
     );
 
-  const [
-    anoHoje,
-    mesHoje,
-    diaHoje,
-  ] =
-    hojeRecife
-      .split("-")
-      .map(Number);
-
-  const [
-    anoFim,
-    mesFim,
-    diaFim,
-  ] =
-    fimRecife
-      .split("-")
-      .map(Number);
-
   const hojeUtc =
-    Date.UTC(
-      anoHoje,
-      mesHoje - 1,
-      diaHoje
+    Date.parse(
+      `${hojeTexto}T00:00:00Z`
     );
 
   const fimUtc =
-    Date.UTC(
-      anoFim,
-      mesFim - 1,
-      diaFim
+    Date.parse(
+      `${fimTexto}T00:00:00Z`
     );
 
-  const diferenca =
+  return Math.max(
+    0,
     Math.floor(
-      (
-        fimUtc -
-        hojeUtc
-      ) /
+      (fimUtc - hojeUtc) /
         (
           1000 *
           60 *
           60 *
           24
         )
-    );
-
-  return Math.max(
-    0,
-    diferenca
+    )
   );
 }
-
-
 
 
 
@@ -346,7 +310,30 @@ function nomeStatusComercial(
 
 
 
-export default async function ConfiguracoesPage() {
+type ConfiguracoesPageProps = {
+  searchParams?: Promise<{
+    checkout?:
+      | string
+      | string[];
+  }>;
+};
+
+
+
+export default async function ConfiguracoesPage({
+  searchParams,
+}: ConfiguracoesPageProps) {
+  const parametros =
+    searchParams
+      ? await searchParams
+      : {};
+
+  const retornoCheckout =
+    Array.isArray(
+      parametros.checkout
+    )
+      ? parametros.checkout[0]
+      : parametros.checkout;
 
   const supabase =
 
@@ -544,6 +531,8 @@ export default async function ConfiguracoesPage() {
 
     assinaturaResposta,
 
+    contratacaoResposta,
+
     mudancaResposta,
 
     planosResposta,
@@ -705,6 +694,62 @@ export default async function ConfiguracoesPage() {
           "vigente",
 
           true
+
+        )
+
+        .order(
+
+          "criada_em",
+
+          {
+
+            ascending:
+
+              false,
+
+          }
+
+        )
+
+        .limit(1)
+
+        .maybeSingle(),
+
+
+
+      supabase
+
+        .from(
+
+          "contratacoes_checkout"
+
+        )
+
+        .select(`
+
+          id,
+
+          plano_codigo,
+
+          ciclo_snapshot,
+
+          valor_snapshot,
+
+          status,
+
+          primeira_cobranca_em,
+
+          concluida_em,
+
+          criada_em
+
+        `)
+
+        .eq(
+
+          "empresa_id",
+
+          empresaId
 
         )
 
@@ -900,6 +945,24 @@ export default async function ConfiguracoesPage() {
 
   if (
 
+    contratacaoResposta.error
+
+  ) {
+
+    throw new Error(
+
+      `Erro ao carregar contratação: ${contratacaoResposta.error.message}`
+
+    );
+
+  }
+
+
+
+
+
+  if (
+
     mudancaResposta.error
 
   ) {
@@ -957,6 +1020,12 @@ export default async function ConfiguracoesPage() {
   const assinatura =
 
     assinaturaResposta.data;
+
+
+
+  const contratacao =
+
+    contratacaoResposta.data;
 
 
 
@@ -1018,21 +1087,117 @@ export default async function ConfiguracoesPage() {
 
 
 
-  const diasTeste =
+  const assinaturaAtiva =
+
+    assinatura
+
+      ?.status_interno ===
+
+      "ativa";
+
+
+
+  const assinaturaPendente =
+
+    assinatura
+
+      ?.status_interno ===
+
+      "pendente";
+
+
+
+  const checkoutPagoSemAssinatura =
+
+    !assinatura &&
+
+    contratacao
+
+      ?.status ===
+
+      "pago";
+
+
+
+  const retornoSucessoAguardando =
+
+    retornoCheckout ===
+
+      "sucesso" &&
+
+    !assinaturaAtiva &&
+
+    conta
+
+      ?.status_comercial !==
+
+      "ativa";
+
+
+
+  const pagamentoEmProcessamento =
+
+    assinaturaPendente ||
+
+    checkoutPagoSemAssinatura ||
+
+    retornoSucessoAguardando;
+
+
+
+  const mostrarTeste =
 
     conta
 
       ?.status_comercial ===
 
-        "teste"
+      "teste" &&
+
+    !pagamentoEmProcessamento &&
+
+    !assinatura;
+
+
+
+  const diasTeste =
+
+    mostrarTeste
 
       ? diasRestantes(
 
-          conta.teste_fim
+          conta?.teste_fim
 
         )
 
       : null;
+
+
+
+  const codigoPlanoExibicao =
+
+    assinatura
+
+      ?.plano_codigo ??
+
+    contratacao
+
+      ?.plano_codigo ??
+
+    null;
+
+
+
+  const planoExibicao =
+
+    planos.find(
+
+      (plano) =>
+
+        plano.codigo ===
+
+        codigoPlanoExibicao
+
+    ) ?? null;
 
 
 
@@ -1308,11 +1473,19 @@ export default async function ConfiguracoesPage() {
 
             <span className="rounded-full border px-3 py-1 text-xs font-medium">
 
-              {nomeStatusComercial(
+              {pagamentoEmProcessamento
 
-                conta.status_comercial
+                ? "Pagamento em processamento"
 
-              )}
+                : assinaturaAtiva
+
+                  ? "Assinatura ativa"
+
+                  : nomeStatusComercial(
+
+                      conta.status_comercial
+
+                    )}
 
             </span>
 
@@ -1328,11 +1501,7 @@ export default async function ConfiguracoesPage() {
 
 
 
-        {conta
-
-          ?.status_comercial ===
-
-          "teste" && (
+        {mostrarTeste && (
 
           <div className="mt-6 rounded-xl border bg-slate-50 p-5">
 
@@ -1452,11 +1621,135 @@ export default async function ConfiguracoesPage() {
 
 
 
+        {/* PAGAMENTO EM PROCESSAMENTO */}
+
+
+
+        {pagamentoEmProcessamento && (
+
+          <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-5">
+
+            <div className="flex items-start gap-3">
+
+              <Clock3 className="mt-0.5 h-5 w-5 text-amber-700" />
+
+
+
+              <div>
+
+                <p className="font-semibold text-amber-950">
+
+                  Pagamento em processamento
+
+                </p>
+
+
+
+                <p className="mt-1 text-sm leading-6 text-amber-900/80">
+
+                  Sua contratação foi recebida. Assim que o Asaas confirmar o pagamento, a assinatura será ativada automaticamente e o período gratuito será encerrado.
+
+                </p>
+
+
+
+                <div className="mt-4 grid gap-4 sm:grid-cols-3">
+
+                  <div>
+
+                    <p className="text-xs uppercase tracking-wide text-amber-800/70">
+
+                      Plano
+
+                    </p>
+
+
+
+                    <p className="mt-1 font-medium">
+
+                      {planoExibicao
+
+                        ?.nome ??
+
+                        codigoPlanoExibicao ??
+
+                        "—"}
+
+                    </p>
+
+                  </div>
+
+
+
+                  <div>
+
+                    <p className="text-xs uppercase tracking-wide text-amber-800/70">
+
+                      Valor
+
+                    </p>
+
+
+
+                    <p className="mt-1 font-medium">
+
+                      {formatarMoeda(
+
+                        assinatura
+
+                          ?.valor_contratado ??
+
+                        contratacao
+
+                          ?.valor_snapshot
+
+                      )}
+
+                    </p>
+
+                  </div>
+
+
+
+                  <div>
+
+                    <p className="text-xs uppercase tracking-wide text-amber-800/70">
+
+                      Cobrança
+
+                    </p>
+
+
+
+                    <p className="mt-1 font-medium">
+
+                      Imediata
+
+                    </p>
+
+                  </div>
+
+                </div>
+
+              </div>
+
+            </div>
+
+          </div>
+
+        )}
+
+
+
+
+
         {/* SEM ASSINATURA */}
 
 
 
         {!assinatura &&
+
+          !pagamentoEmProcessamento &&
 
           conta
 
@@ -1496,7 +1789,9 @@ export default async function ConfiguracoesPage() {
 
 
 
-        {assinatura && (
+        {assinaturaAtiva &&
+
+          assinatura && (
 
           <div className="mt-6">
 
@@ -1514,13 +1809,13 @@ export default async function ConfiguracoesPage() {
 
                 <p className="mt-1 font-semibold">
 
-                  {
+                  {planoExibicao
+
+                    ?.nome ??
 
                     assinatura
 
-                      .plano_codigo
-
-                  }
+                      .plano_codigo}
 
                 </p>
 
@@ -1878,11 +2173,29 @@ export default async function ConfiguracoesPage() {
 
 
 
-      <PlanosAssinatura
+      {!pagamentoEmProcessamento && (
 
-        planos={planos}
+        <PlanosAssinatura
 
-      />
+          planos={planos}
+
+          planoAtualCodigo={
+
+            assinaturaAtiva
+
+              ? assinatura
+
+                  ?.plano_codigo ??
+
+                null
+
+              : null
+
+          }
+
+        />
+
+      )}
 
 
 
