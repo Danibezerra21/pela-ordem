@@ -630,7 +630,10 @@ export async function POST(request: Request) {
       {
         method: "POST",
         body: JSON.stringify({
-          billingTypes: ["CREDIT_CARD"],
+          billingTypes: [
+            "CREDIT_CARD",
+            "PIX",
+          ],
           chargeTypes: ["RECURRENT"],
           minutesToExpire: 1440,
           externalReference: contratacao.id,
