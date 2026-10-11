@@ -191,69 +191,93 @@ function formatarMoeda(
 
 
 function diasRestantes(
-
   fim:
-
     | string
-
     | null
-
     | undefined
-
 ) {
-
   if (!fim) {
-
     return null;
-
   }
 
+  const hojeRecife =
+    new Intl.DateTimeFormat(
+      "en-CA",
+      {
+        timeZone:
+          "America/Recife",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }
+    ).format(
+      new Date()
+    );
 
+  const fimRecife =
+    new Intl.DateTimeFormat(
+      "en-CA",
+      {
+        timeZone:
+          "America/Recife",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }
+    ).format(
+      new Date(fim)
+    );
 
-  const agora =
+  const [
+    anoHoje,
+    mesHoje,
+    diaHoje,
+  ] =
+    hojeRecife
+      .split("-")
+      .map(Number);
 
-    new Date();
+  const [
+    anoFim,
+    mesFim,
+    diaFim,
+  ] =
+    fimRecife
+      .split("-")
+      .map(Number);
 
+  const hojeUtc =
+    Date.UTC(
+      anoHoje,
+      mesHoje - 1,
+      diaHoje
+    );
 
-
-  const termino =
-
-    new Date(fim);
-
-
+  const fimUtc =
+    Date.UTC(
+      anoFim,
+      mesFim - 1,
+      diaFim
+    );
 
   const diferenca =
-
-    termino.getTime() -
-
-    agora.getTime();
-
-
+    Math.floor(
+      (
+        fimUtc -
+        hojeUtc
+      ) /
+        (
+          1000 *
+          60 *
+          60 *
+          24
+        )
+    );
 
   return Math.max(
-
     0,
-
-    Math.ceil(
-
-      diferenca /
-
-        (
-
-          1000 *
-
-          60 *
-
-          60 *
-
-          24
-
-        )
-
-    )
-
+    diferenca
   );
-
 }
 
 
