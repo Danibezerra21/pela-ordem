@@ -533,37 +533,252 @@ export async function POST(
 
 
   /* =====================================================
-     CANCELA CHECKOUT ABERTO ANTERIOR
-  ===================================================== */
+   CHECKOUT ANTERIOR
+===================================================== */
 
-  const {
-    data:
-      checkoutAberto,
-  } =
-    await admin
-      .from(
-        "contratacoes_checkout"
-      )
-      .select(
-        "id, asaas_checkout_id, status"
-      )
-      .eq(
-        "empresa_id",
-        empresaId
-      )
-      .in(
-        "status",
-        [
-          "preparando",
-          "ativo",
-        ]
-      )
-      .maybeSingle();
+const {
+  data:
+    checkoutAberto,
+  error:
+    erroCheckoutAberto,
+} =
+  await admin
+    .from(
+      "contratacoes_checkout"
+    )
+    .select(`
+      id,
+      plano_codigo,
+      asaas_checkout_id,
+      status,
+      primeira_cobranca_em,
+      expira_em
+    `)
+    .eq(
+      "empresa_id",
+      empresaId
+    )
+    .in(
+      "status",
+      [
+        "preparando",
+        "ativo",
+      ]
+    )
+    .order(
+      "criada_em",
+      {
+        ascending:
+          false,
+      }
+    )
+    .limit(1)
+    .maybeSingle();
 
 
+if (
+  erroCheckoutAberto
+) {
+  console.error(
+    "Erro ao consultar Checkout anterior:",
+    erroCheckoutAberto
+  );
+
+  return NextResponse.json(
+    {
+      ok: false,
+      mensagem:
+        "Não foi possível verificar a contratação anterior.",
+    },
+    {
+      status: 500,
+    }
+  );
+}
+
+
+if (checkoutAberto) {
+  const agora =
+    new Date();
+
+
+  const expiracao =
+    checkoutAberto
+      .expira_em
+      ? new Date(
+          checkoutAberto
+            .expira_em
+        )
+      : null;
+
+
+  const expirado =
+    expiracao
+      ? expiracao.getTime() <=
+        agora.getTime()
+      : false;
+
+
+  /*
+   * Mesmo plano + Checkout ainda válido:
+   * apenas reabre a página do Asaas.
+   *
+   * Não criamos outro Checkout
+   * e não mostramos erro ao usuário.
+   */
   if (
     checkoutAberto
-      ?.asaas_checkout_id
+      .asaas_checkout_id &&
+    !expirado &&
+    checkoutAberto
+      .plano_codigo ===
+      plano.codigo
+  ) {
+    const checkoutUrl =
+      `https://asaas.com/checkoutSession/show?id=${encodeURIComponent(
+        checkoutAberto
+          .asaas_checkout_id
+      )}`;
+
+
+    return NextResponse.json({
+      ok: true,
+
+      tipo:
+        "checkout",
+
+      checkoutId:
+        checkoutAberto
+          .asaas_checkout_id,
+
+      checkoutUrl,
+
+      primeiraCobrancaEm:
+        checkoutAberto
+          .primeira_cobranca_em,
+
+      reutilizado:
+        true,
+    });
+  }
+
+
+  /*
+   * Checkout expirado:
+   * libera automaticamente uma
+   * nova tentativa.
+   */
+  if (expirado) {
+    const {
+      error:
+        erroExpirar,
+    } =
+      await admin
+        .from(
+          "contratacoes_checkout"
+        )
+        .update({
+          status:
+            "expirado",
+
+          expirada_em:
+            agora
+              .toISOString(),
+        })
+        .eq(
+          "id",
+          checkoutAberto.id
+        );
+
+
+    if (erroExpirar) {
+      console.error(
+        "Erro ao expirar Checkout anterior:",
+        erroExpirar
+      );
+
+      return NextResponse.json(
+        {
+          ok: false,
+          mensagem:
+            "Não foi possível reiniciar a contratação.",
+        },
+        {
+          status: 500,
+        }
+      );
+    }
+  }
+
+
+  /*
+   * Registro ficou em preparação sem
+   * chegar a receber um ID do Asaas.
+   *
+   * Não há página de pagamento para
+   * reutilizar, então liberamos nova
+   * tentativa.
+   */
+  else if (
+    !checkoutAberto
+      .asaas_checkout_id
+  ) {
+    const {
+      error:
+        erroCancelarRegistro,
+    } =
+      await admin
+        .from(
+          "contratacoes_checkout"
+        )
+        .update({
+          status:
+            "cancelado",
+
+          cancelada_em:
+            agora
+              .toISOString(),
+        })
+        .eq(
+          "id",
+          checkoutAberto.id
+        );
+
+
+    if (
+      erroCancelarRegistro
+    ) {
+      console.error(
+        "Erro ao encerrar tentativa incompleta:",
+        erroCancelarRegistro
+      );
+
+      return NextResponse.json(
+        {
+          ok: false,
+          mensagem:
+            "Não foi possível reiniciar a contratação.",
+        },
+        {
+          status: 500,
+        }
+      );
+    }
+  }
+
+
+  /*
+   * Existe um Checkout válido,
+   * mas ele pertence a OUTRO plano.
+   *
+   * Nesse caso precisamos cancelar
+   * antes de gerar o novo para evitar
+   * duas jornadas pagáveis.
+   */
+  else if (
+    checkoutAberto
+      .plano_codigo !==
+    plano.codigo
   ) {
     try {
       await asaasRequest(
@@ -573,64 +788,58 @@ export async function POST(
             "POST",
         }
       );
+
+
+      const {
+        error:
+          erroCancelar,
+      } =
+        await admin
+          .from(
+            "contratacoes_checkout"
+          )
+          .update({
+            status:
+              "cancelado",
+
+            cancelada_em:
+              agora
+                .toISOString(),
+          })
+          .eq(
+            "id",
+            checkoutAberto.id
+          );
+
+
+      if (
+        erroCancelar
+      ) {
+        throw erroCancelar;
+      }
     } catch (
       error:
         unknown
     ) {
       console.error(
-        "Não foi possível cancelar o Checkout anterior:",
+        "Erro ao trocar Checkout de plano:",
         error
       );
+
 
       return NextResponse.json(
         {
           ok: false,
           mensagem:
-            "Já existe uma contratação em andamento. Tente novamente após cancelar ou expirar o Checkout anterior.",
+            "Não foi possível trocar o plano da contratação neste momento. Tente novamente.",
         },
         {
           status: 409,
         }
       );
     }
-
-
-    await admin
-      .from(
-        "contratacoes_checkout"
-      )
-      .update({
-        status:
-          "cancelado",
-
-        cancelada_em:
-          new Date()
-            .toISOString(),
-      })
-      .eq(
-        "id",
-        checkoutAberto.id
-      );
-  } else if (
-    checkoutAberto
-  ) {
-    await admin
-      .from(
-        "contratacoes_checkout"
-      )
-      .update({
-        status:
-          "cancelado",
-
-        cancelada_em:
-          new Date()
-            .toISOString(),
-      })
-      .eq(
-        "id",
-        checkoutAberto.id
-      );
   }
+}
 
 
   /* =====================================================
@@ -773,7 +982,7 @@ export async function POST(
               ],
 
               minutesToExpire:
-                60,
+              1440,
 
               externalReference:
                 contratacao.id,
@@ -830,7 +1039,8 @@ export async function POST(
     const expiraEm =
       new Date(
         Date.now() +
-          60 *
+          24 *
+            60 *
             60 *
             1000
       );
