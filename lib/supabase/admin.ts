@@ -1,8 +1,9 @@
 import "server-only";
 
 import {
-  createClient as createSupabaseClient,
+  createClient,
 } from "@supabase/supabase-js";
+
 
 export function createAdminClient() {
   const url =
@@ -11,9 +12,8 @@ export function createAdminClient() {
 
   const secretKey =
     process.env
-      .SUPABASE_SECRET_KEY ??
-    process.env
-      .SUPABASE_SERVICE_ROLE_KEY;
+      .SUPABASE_SECRET_KEY;
+
 
   if (!url) {
     throw new Error(
@@ -21,13 +21,15 @@ export function createAdminClient() {
     );
   }
 
+
   if (!secretKey) {
     throw new Error(
       "SUPABASE_SECRET_KEY não configurada."
     );
   }
 
-  return createSupabaseClient(
+
+  return createClient(
     url,
     secretKey,
     {
@@ -36,9 +38,6 @@ export function createAdminClient() {
           false,
 
         persistSession:
-          false,
-
-        detectSessionInUrl:
           false,
       },
     }
