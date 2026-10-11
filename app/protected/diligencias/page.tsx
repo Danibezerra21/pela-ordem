@@ -1004,7 +1004,7 @@ export default async function DiligenciasPage({
 
       {/* ===============================================
           PESQUISA
-      ================================================ 
+      ================================================ */}
 
       <section className="mb-6 rounded-xl border bg-card p-4">
         <div className="flex items-center gap-3 rounded-lg border px-4 py-3">
@@ -1012,7 +1012,7 @@ export default async function DiligenciasPage({
 
           
         </div>
-      </section>*/}
+      </section>
 
 
       {/* ===============================================
