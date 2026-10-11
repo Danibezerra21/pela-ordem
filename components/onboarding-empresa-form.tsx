@@ -1,13 +1,7 @@
 "use client";
 
-import {
-  useState,
-} from "react";
-
-import {
-  useRouter,
-} from "next/navigation";
-
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Building2,
   CircleCheck,
@@ -15,13 +9,9 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
-import {
-  createClient,
-} from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 
-import {
-  Button,
-} from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 
 import {
   Card,
@@ -31,19 +21,12 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-import {
-  Input,
-} from "@/components/ui/input";
-
-import {
-  Label,
-} from "@/components/ui/label";
-
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 type TipoDocumento =
   | "cpf"
   | "cnpj";
-
 
 function somenteDigitos(
   valor: string
@@ -53,7 +36,6 @@ function somenteDigitos(
     ""
   );
 }
-
 
 function formatarCPF(
   valor: string
@@ -80,7 +62,6 @@ function formatarCPF(
       "$1-$2"
     );
 }
-
 
 function formatarCNPJ(
   valor: string
@@ -112,7 +93,6 @@ function formatarCNPJ(
     );
 }
 
-
 function cpfValido(
   cpfOriginal: string
 ) {
@@ -122,8 +102,7 @@ function cpfValido(
     );
 
   if (
-    cpf.length !==
-      11 ||
+    cpf.length !== 11 ||
     /^(\d)\1+$/.test(
       cpf
     )
@@ -131,47 +110,38 @@ function cpfValido(
     return false;
   }
 
+  const calcular = (
+    tamanho: number
+  ) => {
+    let soma = 0;
 
-  const calcular =
-    (
-      tamanho:
-        number
-    ) => {
-      let soma =
-        0;
-
-      for (
-        let i =
-          0;
-        i <
-        tamanho;
-        i +=
-          1
-      ) {
-        soma +=
-          Number(
-            cpf[i]
-          ) *
-          (
-            tamanho +
-            1 -
-            i
-          );
-      }
-
-      const resto =
+    for (
+      let i = 0;
+      i < tamanho;
+      i += 1
+    ) {
+      soma +=
+        Number(
+          cpf[i]
+        ) *
         (
-          soma *
-          10
-        ) %
-        11;
+          tamanho +
+          1 -
+          i
+        );
+    }
 
-      return resto ===
+    const resto =
+      (
+        soma *
         10
-        ? 0
-        : resto;
-    };
+      ) %
+      11;
 
+    return resto === 10
+      ? 0
+      : resto;
+  };
 
   return (
     calcular(9) ===
@@ -185,10 +155,8 @@ function cpfValido(
   );
 }
 
-
 function cnpjValido(
-  cnpjOriginal:
-    string
+  cnpjOriginal: string
 ) {
   const cnpj =
     somenteDigitos(
@@ -196,8 +164,7 @@ function cnpjValido(
     );
 
   if (
-    cnpj.length !==
-      14 ||
+    cnpj.length !== 14 ||
     /^(\d)\1+$/.test(
       cnpj
     )
@@ -205,44 +172,38 @@ function cnpjValido(
     return false;
   }
 
+  const calcular = (
+    base: string,
+    pesos: number[]
+  ) => {
+    const soma =
+      base
+        .split("")
+        .reduce(
+          (
+            total,
+            digito,
+            indice
+          ) =>
+            total +
+            Number(
+              digito
+            ) *
+              pesos[
+                indice
+              ],
+          0
+        );
 
-  const calcular =
-    (
-      base:
-        string,
-      pesos:
-        number[]
-    ) => {
-      const soma =
-        base
-          .split("")
-          .reduce(
-            (
-              total,
-              digito,
-              indice
-            ) =>
-              total +
-              Number(
-                digito
-              ) *
-                pesos[
-                  indice
-                ],
-            0
-          );
+    const resto =
+      soma %
+      11;
 
-      const resto =
-        soma %
-        11;
-
-      return resto <
-        2
-        ? 0
-        : 11 -
-            resto;
-    };
-
+    return resto < 2
+      ? 0
+      : 11 -
+          resto;
+  };
 
   const primeiro =
     calcular(
@@ -256,7 +217,6 @@ function cnpjValido(
         5, 4, 3, 2,
       ]
     );
-
 
   const segundo =
     calcular(
@@ -273,7 +233,6 @@ function cnpjValido(
       ]
     );
 
-
   return (
     primeiro ===
       Number(
@@ -286,18 +245,48 @@ function cnpjValido(
   );
 }
 
+function obterMensagemErro(
+  error: unknown
+) {
+  if (
+    error instanceof Error
+  ) {
+    return error.message;
+  }
+
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error
+  ) {
+    const mensagem =
+      (
+        error as {
+          message?: unknown;
+        }
+      ).message;
+
+    if (
+      typeof mensagem ===
+        "string" &&
+      mensagem.trim()
+    ) {
+      return mensagem;
+    }
+  }
+
+  return "Não foi possível concluir o cadastro.";
+}
 
 export function OnboardingEmpresaForm() {
   const router =
     useRouter();
-
 
   const [
     nomeEmpresa,
     setNomeEmpresa,
   ] =
     useState("");
-
 
   const [
     tipoDocumento,
@@ -307,13 +296,11 @@ export function OnboardingEmpresaForm() {
       "cnpj"
     );
 
-
   const [
     documento,
     setDocumento,
   ] =
     useState("");
-
 
   const [
     erro,
@@ -323,17 +310,14 @@ export function OnboardingEmpresaForm() {
       string | null
     >(null);
 
-
   const [
     carregando,
     setCarregando,
   ] =
     useState(false);
 
-
   function alterarTipo(
-    tipo:
-      TipoDocumento
+    tipo: TipoDocumento
   ) {
     setTipoDocumento(
       tipo
@@ -347,7 +331,6 @@ export function OnboardingEmpresaForm() {
       null
     );
   }
-
 
   function alterarDocumento(
     valor: string
@@ -364,7 +347,6 @@ export function OnboardingEmpresaForm() {
     );
   }
 
-
   async function concluir(
     evento:
       React.FormEvent
@@ -375,7 +357,6 @@ export function OnboardingEmpresaForm() {
       null
     );
 
-
     const nome =
       nomeEmpresa
         .trim()
@@ -384,10 +365,8 @@ export function OnboardingEmpresaForm() {
           " "
         );
 
-
     if (
-      nome.length <
-      2
+      nome.length < 2
     ) {
       setErro(
         "Informe o nome do escritório ou empresa."
@@ -396,12 +375,10 @@ export function OnboardingEmpresaForm() {
       return;
     }
 
-
     const documentoLimpo =
       somenteDigitos(
         documento
       );
-
 
     if (
       tipoDocumento ===
@@ -417,7 +394,6 @@ export function OnboardingEmpresaForm() {
       return;
     }
 
-
     if (
       tipoDocumento ===
         "cnpj" &&
@@ -432,16 +408,13 @@ export function OnboardingEmpresaForm() {
       return;
     }
 
-
     setCarregando(
       true
     );
 
-
     try {
       const supabase =
         createClient();
-
 
       const {
         error:
@@ -462,13 +435,21 @@ export function OnboardingEmpresaForm() {
             }
           );
 
-
       if (
         rpcError
       ) {
-        throw rpcError;
-      }
+        console.error(
+          "Erro ao criar empresa inicial:",
+          rpcError
+        );
 
+        setErro(
+          rpcError.message ||
+            "Não foi possível concluir o cadastro."
+        );
+
+        return;
+      }
 
       router.replace(
         "/protected"
@@ -476,14 +457,17 @@ export function OnboardingEmpresaForm() {
 
       router.refresh();
     } catch (
-      error:
-        unknown
+      error: unknown
     ) {
+      console.error(
+        "Erro inesperado no onboarding:",
+        error
+      );
+
       setErro(
-        error instanceof
-          Error
-          ? error.message
-          : "Não foi possível concluir o cadastro."
+        obterMensagemErro(
+          error
+        )
       );
     } finally {
       setCarregando(
@@ -491,7 +475,6 @@ export function OnboardingEmpresaForm() {
       );
     }
   }
-
 
   return (
     <Card className="w-full max-w-xl">
@@ -510,7 +493,6 @@ export function OnboardingEmpresaForm() {
           NOTE LITIS.
         </CardDescription>
       </CardHeader>
-
 
       <CardContent>
         <form
@@ -544,7 +526,6 @@ export function OnboardingEmpresaForm() {
               required
             />
           </div>
-
 
           <div className="space-y-3">
             <Label>
@@ -588,7 +569,6 @@ export function OnboardingEmpresaForm() {
             </div>
           </div>
 
-
           <div className="grid gap-2">
             <Label
               htmlFor="documento"
@@ -623,12 +603,11 @@ export function OnboardingEmpresaForm() {
             />
 
             <p className="text-xs leading-5 text-muted-foreground">
-                O número completo do CPF ou CNPJ não ficará armazenado no cadastro.
-                O documento será utilizado para identificar a conta e verificar a
-                elegibilidade ao período gratuito.
+              O número completo do CPF ou CNPJ não ficará armazenado no cadastro.
+              O documento será utilizado para identificar a conta e verificar a
+              elegibilidade ao período gratuito.
             </p>
           </div>
-
 
           <div className="rounded-xl border bg-slate-50 p-4">
             <div className="flex gap-3">
@@ -651,7 +630,6 @@ export function OnboardingEmpresaForm() {
             </div>
           </div>
 
-
           <div className="flex gap-3 rounded-xl border p-4">
             <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0" />
 
@@ -664,13 +642,11 @@ export function OnboardingEmpresaForm() {
             </p>
           </div>
 
-
           {erro && (
             <p className="text-sm text-red-600">
               {erro}
             </p>
           )}
-
 
           <Button
             type="submit"
