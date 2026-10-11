@@ -8,6 +8,10 @@ import {
 
 } from "@/components/planos-assinatura";
 
+import {
+  SincronizarAssinaturaAsaas,
+} from "@/components/sincronizar-assinatura-asaas";
+
 
 
 import {
@@ -1206,6 +1210,7 @@ export default async function ConfiguracoesPage({
   return (
 
     <div className="space-y-8">
+      <SincronizarAssinaturaAsaas />
 
       {/* =================================================
 
