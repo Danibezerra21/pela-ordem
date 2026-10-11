@@ -1010,7 +1010,9 @@ export default async function DiligenciasPage({
         <div className="flex items-center gap-3 rounded-lg border px-4 py-3">
           <Search className="h-4 w-4 text-muted-foreground" />
 
-          
+          <span className="text-sm text-muted-foreground">
+            Em breve: pesquisar por processo, partes, comarca ou vara
+          </span>
         </div>
       </section>
 
