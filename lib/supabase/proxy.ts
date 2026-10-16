@@ -39,8 +39,11 @@ function hojeEmRecife() {
 
 
 function copiarCookies(
-  origem: NextResponse,
-  destino: NextResponse
+  origem:
+    NextResponse,
+
+  destino:
+    NextResponse
 ) {
   origem.cookies
     .getAll()
@@ -55,11 +58,13 @@ function copiarCookies(
         } =
           cookie;
 
-        destino.cookies.set(
-          name,
-          value,
-          options
-        );
+        destino
+          .cookies
+          .set(
+            name,
+            value,
+            options
+          );
       }
     );
 }
@@ -100,7 +105,7 @@ function redirecionarPreservandoSessao(
 }
 
 
-function rotaLiberadaSemAssinatura(
+function rotaClienteLiberadaSemAssinatura(
   pathname:
     string,
 
@@ -120,25 +125,9 @@ function rotaLiberadaSemAssinatura(
     return true;
   }
 
-  /*
-   * Administração da plataforma.
-   *
-   * A própria página /protected/suporte
-   * valida se o usuário é administrador
-   * da plataforma.
-   */
-  if (
-    pathname ===
-      "/protected/suporte" ||
-    pathname.startsWith(
-      "/protected/suporte/"
-    )
-  ) {
-    return true;
-  }
 
   /*
-   * Evita loop de redirecionamento.
+   * Evita loop.
    */
   if (
     pathname ===
@@ -147,9 +136,11 @@ function rotaLiberadaSemAssinatura(
     return true;
   }
 
+
   /*
-   * Apenas o Master possui acesso
-   * às Configurações e ao pagamento.
+   * O Master precisa conseguir
+   * entrar em Configurações
+   * para realizar o pagamento.
    */
   if (
     papel ===
@@ -165,6 +156,7 @@ function rotaLiberadaSemAssinatura(
     return true;
   }
 
+
   return false;
 }
 
@@ -179,11 +171,6 @@ export async function updateSession(
     });
 
 
-  /*
-   * Se as variáveis básicas ainda
-   * não estiverem configuradas,
-   * mantém o comportamento padrão.
-   */
   if (
     !hasEnvVars
   ) {
@@ -251,10 +238,8 @@ export async function updateSession(
 
 
   /*
-   * IMPORTANTE:
-   *
-   * Não inserir consultas entre
-   * createServerClient e getClaims().
+   * Não inserir consultas antes
+   * de getClaims().
    */
   const {
     data,
@@ -304,10 +289,6 @@ export async function updateSession(
   }
 
 
-  /*
-   * A partir daqui, a regra comercial
-   * só interessa às páginas protegidas.
-   */
   const pathname =
     request
       .nextUrl
@@ -340,12 +321,8 @@ export async function updateSession(
 
   /*
    * =====================================================
-   * CLIENTE ADMINISTRATIVO
+   * CLIENTE ADMINISTRATIVO DO SUPABASE
    * =====================================================
-   *
-   * É usado apenas no servidor.
-   * A chave secreta nunca vai para
-   * o navegador.
    */
 
   const supabaseUrl =
@@ -362,13 +339,9 @@ export async function updateSession(
     !secretKey
   ) {
     console.error(
-      "Não foi possível verificar o acesso comercial: variáveis do Supabase ausentes."
+      "Não foi possível verificar o acesso: variáveis do Supabase ausentes."
     );
 
-    /*
-     * Em caso de falha de infraestrutura,
-     * não bloqueamos todos os clientes.
-     */
     return supabaseResponse;
   }
 
@@ -394,8 +367,91 @@ export async function updateSession(
 
   /*
    * =====================================================
-   * CONFIGURAÇÃO GLOBAL
+   * ADMINISTRADOR DA PLATAFORMA
    * =====================================================
+   *
+   * Esta verificação vem ANTES de qualquer
+   * regra de empresa, Beta ou mensalidade.
+   *
+   * Administrador da plataforma não é cliente.
+   */
+
+  const {
+    data:
+      administradorPlataforma,
+
+    error:
+      erroAdministrador,
+  } =
+    await admin
+      .from(
+        "administradores_plataforma"
+      )
+      .select(
+        "id"
+      )
+      .eq(
+        "usuario_id",
+        usuarioId
+      )
+      .eq(
+        "ativo",
+        true
+      )
+      .maybeSingle();
+
+
+  if (
+    erroAdministrador
+  ) {
+    console.error(
+      "Não foi possível verificar o administrador da plataforma:",
+      erroAdministrador
+    );
+  }
+
+
+  if (
+    administradorPlataforma
+  ) {
+    /*
+     * Toda a administração da plataforma
+     * fica em /protected/suporte.
+     */
+    if (
+      pathname ===
+        "/protected/suporte" ||
+      pathname.startsWith(
+        "/protected/suporte/"
+      )
+    ) {
+      return supabaseResponse;
+    }
+
+
+    /*
+     * Se o administrador entrar em qualquer
+     * outra área protegida, vai para seu
+     * painel administrativo.
+     */
+    return redirecionarPreservandoSessao(
+      request,
+      supabaseResponse,
+      "/protected/suporte"
+    );
+  }
+
+
+  /*
+   * =====================================================
+   * DAQUI PARA BAIXO:
+   * SOMENTE CLIENTES DO NOTE LITIS
+   * =====================================================
+   */
+
+
+  /*
+   * CONFIGURAÇÃO GLOBAL
    */
 
   const {
@@ -433,8 +489,8 @@ export async function updateSession(
 
 
   /*
-   * Enquanto a Beta estiver ativa,
-   * não existe bloqueio comercial.
+   * Durante a Beta, clientes
+   * não sofrem bloqueio comercial.
    */
   if (
     configuracao.beta_ativa
@@ -445,7 +501,7 @@ export async function updateSession(
 
   /*
    * =====================================================
-   * EMPRESA DO USUÁRIO
+   * EMPRESA DO CLIENTE
    * =====================================================
    */
 
@@ -490,9 +546,8 @@ export async function updateSession(
 
 
   /*
-   * Usuário ainda sem empresa.
-   * O onboarding continua tratando
-   * esse cenário.
+   * Cliente ainda sem empresa:
+   * onboarding tratará o caso.
    */
   if (
     !membro
@@ -502,12 +557,11 @@ export async function updateSession(
 
 
   /*
-   * Configurações, Suporte e Administração
-   * continuam disponíveis mesmo sem
-   * mensalidade vigente.
+   * Telas necessárias mesmo
+   * sem mensalidade vigente.
    */
   if (
-    rotaLiberadaSemAssinatura(
+    rotaClienteLiberadaSemAssinatura(
       pathname,
       membro.papel
     )
@@ -578,12 +632,8 @@ export async function updateSession(
 
   /*
    * =====================================================
-   * ACESSO SEM MENSALIDADE
+   * CLIENTE SEM MENSALIDADE
    * =====================================================
-   *
-   * Master -> página onde pode pagar.
-   *
-   * Demais usuários -> Suporte.
    */
 
   if (

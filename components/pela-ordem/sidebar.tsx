@@ -267,40 +267,58 @@ export function Sidebar({
 
   /*
    * =====================================================
+   * ADMINISTRADOR EXCLUSIVO DA PLATAFORMA
+   * =====================================================
+   *
+   * Não é cliente.
+   * Não possui empresa.
+   * Não possui mensalidade.
+   */
+
+  const administradorExclusivo =
+    administradorPlataforma &&
+    tipoAcesso ===
+      "sem_vinculo";
+
+
+  /*
+   * =====================================================
    * ITENS DO CLIENTE
    * =====================================================
    */
 
   const itensVisiveis =
-    itensMenu.filter(
-      (
-        item
-      ) => {
-        const possuiPerfil =
-          item
-            .acessos
-            .includes(
-              tipoAcesso
+    administradorExclusivo
+      ? []
+      : itensMenu.filter(
+          (
+            item
+          ) => {
+            const possuiPerfil =
+              item
+                .acessos
+                .includes(
+                  tipoAcesso
+                );
+
+            if (
+              !possuiPerfil
+            ) {
+              return false;
+            }
+
+            if (
+              acessoOperacional
+            ) {
+              return true;
+            }
+
+            return (
+              !item
+                .exigeAcessoOperacional
             );
-
-        if (
-          !possuiPerfil
-        ) {
-          return false;
-        }
-
-        if (
-          acessoOperacional
-        ) {
-          return true;
-        }
-
-        return (
-          !item
-            .exigeAcessoOperacional
+          }
         );
-      }
-    );
 
 
   /*
@@ -314,14 +332,14 @@ export function Sidebar({
 
 
   if (
+    administradorExclusivo
+  ) {
+    hrefMarca =
+      "/protected/suporte";
+  } else if (
     !acessoOperacional
   ) {
     if (
-      administradorPlataforma
-    ) {
-      hrefMarca =
-        "/protected/suporte";
-    } else if (
       tipoAcesso ===
       "master"
     ) {
@@ -363,7 +381,9 @@ export function Sidebar({
 
 
         <p className="mt-5 text-sm text-white/75">
-          Gestão de diligências
+          {administradorExclusivo
+            ? "Administração da plataforma"
+            : "Gestão de diligências"}
         </p>
 
       </div>
@@ -440,37 +460,39 @@ export function Sidebar({
         )}
 
 
-        {/* AVISO COMERCIAL */}
+        {/* AVISO COMERCIAL — SOMENTE CLIENTES */}
 
-        {!acessoOperacional && (
-          <div className="mt-5 rounded-xl border border-white/15 bg-white/5 p-4">
+        {!administradorExclusivo &&
+          !acessoOperacional && (
+            <div className="mt-5 rounded-xl border border-white/15 bg-white/5 p-4">
 
-            <div className="flex items-start gap-3">
+              <div className="flex items-start gap-3">
 
-              <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0 text-white/70" />
+                <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0 text-white/70" />
 
-              <div>
-                <p className="text-sm font-medium text-white">
-                  Acesso operacional indisponível
-                </p>
+                <div>
 
-                {tipoAcesso ===
-                "master" ? (
-                  <p className="mt-1 text-xs leading-5 text-white/60">
-                    Regularize a mensalidade em Configurações para liberar novamente as funções operacionais.
+                  <p className="text-sm font-medium text-white">
+                    Acesso operacional indisponível
                   </p>
-                ) : (
-                  <p className="mt-1 text-xs leading-5 text-white/60">
-                    A mensalidade da empresa precisa ser regularizada pelo usuário Master.
-                  </p>
-                )}
+
+                  {tipoAcesso ===
+                  "master" ? (
+                    <p className="mt-1 text-xs leading-5 text-white/60">
+                      Regularize a mensalidade em Configurações para liberar novamente as funções operacionais.
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-xs leading-5 text-white/60">
+                      A mensalidade da empresa precisa ser regularizada pelo usuário Master.
+                    </p>
+                  )}
+
+                </div>
 
               </div>
 
             </div>
-
-          </div>
-        )}
+          )}
 
       </nav>
 
@@ -504,7 +526,9 @@ export function Sidebar({
           </p>
 
           <p className="mt-1 text-xs text-white/30">
-            Sistema de gestão de diligências
+            {administradorExclusivo
+              ? "Painel administrativo"
+              : "Sistema de gestão de diligências"}
           </p>
 
         </div>
