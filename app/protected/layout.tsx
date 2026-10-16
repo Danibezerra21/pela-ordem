@@ -88,9 +88,50 @@ export default async function ProtectedLayout({
       .sub;
 
 
+  const admin =
+    createAdminClient();
+
+
   /*
    * =====================================================
-   * VÍNCULO
+   * ADMINISTRADOR DA PLATAFORMA
+   * =====================================================
+   *
+   * Esta verificação ocorre ANTES da exigência
+   * de vínculo com um escritório.
+   */
+
+  const {
+    data:
+      administrador,
+  } =
+    await admin
+      .from(
+        "administradores_plataforma"
+      )
+      .select(
+        "id"
+      )
+      .eq(
+        "usuario_id",
+        usuarioId
+      )
+      .eq(
+        "ativo",
+        true
+      )
+      .maybeSingle();
+
+
+  const administradorPlataforma =
+    Boolean(
+      administrador
+    );
+
+
+  /*
+   * =====================================================
+   * VÍNCULO COM EMPRESA
    * =====================================================
    */
 
@@ -130,6 +171,72 @@ export default async function ProtectedLayout({
     );
   }
 
+
+  /*
+   * Administradores da plataforma não precisam
+   * pertencer a um escritório.
+   */
+  if (
+    !membro &&
+    !administradorPlataforma
+  ) {
+    redirect(
+      "/auth/onboarding"
+    );
+  }
+
+
+  /*
+   * =====================================================
+   * ADMINISTRADOR SEM EMPRESA
+   * =====================================================
+   */
+
+  if (
+    administradorPlataforma &&
+    !membro
+  ) {
+    return (
+      <div className="min-h-screen bg-background">
+
+        <div className="flex min-h-screen">
+
+          <Suspense
+            fallback={
+              null
+            }
+          >
+            <Sidebar
+              tipoAcesso="sem_vinculo"
+              acessoOperacional={
+                false
+              }
+              administradorPlataforma={
+                true
+              }
+            />
+          </Suspense>
+
+
+          <div className="min-w-0 flex-1">
+
+            <main className="mx-auto w-full max-w-7xl px-8 py-10">
+              {children}
+            </main>
+
+          </div>
+
+        </div>
+
+      </div>
+    );
+  }
+
+
+  /*
+   * Daqui para baixo, sabemos que existe
+   * vínculo com empresa.
+   */
 
   if (
     !membro
@@ -174,14 +281,9 @@ export default async function ProtectedLayout({
    * =====================================================
    */
 
-  const admin =
-    createAdminClient();
-
-
   const [
     configuracaoResposta,
     contaResposta,
-    administradorResposta,
   ] =
     await Promise.all([
       admin
@@ -209,30 +311,12 @@ export default async function ProtectedLayout({
           membro.empresa_id
         )
         .maybeSingle(),
-
-      admin
-        .from(
-          "administradores_plataforma"
-        )
-        .select(
-          "id"
-        )
-        .eq(
-          "usuario_id",
-          usuarioId
-        )
-        .eq(
-          "ativo",
-          true
-        )
-        .maybeSingle(),
     ]);
 
 
   /*
-   * Em caso de falha temporária de
-   * consulta da configuração global,
-   * evitamos bloquear todo o sistema.
+   * Falha técnica na configuração global:
+   * evita bloquear todos os usuários.
    */
   const betaAtiva =
     configuracaoResposta
@@ -257,10 +341,6 @@ export default async function ProtectedLayout({
       contaResposta
         .error
     ) {
-      /*
-       * Fail-open apenas para falha
-       * técnica inesperada.
-       */
       acessoOperacional =
         true;
     } else {
@@ -281,15 +361,6 @@ export default async function ProtectedLayout({
         );
     }
   }
-
-
-  const administradorPlataforma =
-    !administradorResposta
-      .error &&
-    Boolean(
-      administradorResposta
-        .data
-    );
 
 
   return (
