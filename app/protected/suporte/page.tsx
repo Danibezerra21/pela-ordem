@@ -2,11 +2,13 @@ import Link from "next/link";
 
 import {
   Bug,
+  Building2,
   CalendarDays,
   CircleCheck,
   CreditCard,
   Headphones,
   MessageSquare,
+  Search,
   Settings2,
 } from "lucide-react";
 
@@ -130,7 +132,36 @@ function nomeCategoria(
   return nomes[categoria] ?? categoria;
 }
 
-export default async function SuportePage() {
+type SuportePageProps = {
+  searchParams?: Promise<{
+    busca?:
+      | string
+      | string[];
+  }>;
+};
+
+export default async function SuportePage({
+  searchParams,
+}: SuportePageProps) {
+  const parametros =
+    searchParams
+      ? await searchParams
+      : {};
+
+  const buscaRecebida =
+    Array.isArray(
+      parametros.busca
+    )
+      ? parametros.busca[0]
+      : parametros.busca;
+
+  const busca =
+    (buscaRecebida ?? "")
+      .trim();
+
+  const termoBusca =
+    busca.toLowerCase();
+
   const supabase =
     await createClient();
 
@@ -186,6 +217,8 @@ export default async function SuportePage() {
     configuracaoResposta,
     chamadosResposta,
     pagamentosResposta,
+    empresasResposta,
+    mastersResposta,
   ] =
     await Promise.all([
       admin
@@ -247,6 +280,40 @@ export default async function SuportePage() {
           "status",
           "aguardando_confirmacao"
         ),
+
+      admin
+        .from("empresas")
+        .select(`
+          id,
+          nome,
+          tipo_documento,
+          documento_final,
+          status_acesso,
+          criada_em
+        `)
+        .order(
+          "nome",
+          {
+            ascending: true,
+          }
+        ),
+
+      admin
+        .from(
+          "membros_empresa"
+        )
+        .select(`
+          empresa_id,
+          usuario_id
+        `)
+        .eq(
+          "papel",
+          "master"
+        )
+        .eq(
+          "ativo",
+          true
+        ),
     ]);
 
   if (
@@ -265,50 +332,153 @@ export default async function SuportePage() {
     );
   }
 
+  if (
+    empresasResposta.error
+  ) {
+    throw new Error(
+      `Erro ao carregar empresas: ${empresasResposta.error.message}`
+    );
+  }
+
+  if (
+    mastersResposta.error
+  ) {
+    throw new Error(
+      `Erro ao carregar usuários Master: ${mastersResposta.error.message}`
+    );
+  }
+
   const configuracao =
     configuracaoResposta.data;
 
   const chamados =
     chamadosResposta.data ?? [];
 
-  const empresasIds =
+  const empresas =
+    empresasResposta.data ?? [];
+
+  const vinculosMaster =
+    mastersResposta.data ?? [];
+
+  const idsMasters =
     [
       ...new Set(
-        chamados.map(
-          (chamado) =>
-            chamado.empresa_id
+        vinculosMaster.map(
+          (vinculo) =>
+            vinculo.usuario_id
         )
       ),
     ];
 
   const {
-    data: empresas,
-    error: erroEmpresas,
+    data: perfisMasters,
+    error: erroPerfisMasters,
   } =
-    empresasIds.length
+    idsMasters.length
       ? await admin
-          .from("empresas")
-          .select("id, nome")
+          .from(
+            "perfis_usuarios"
+          )
+          .select(`
+            id,
+            nome,
+            email
+          `)
           .in(
             "id",
-            empresasIds
+            idsMasters
           )
       : {
           data: [],
           error: null,
         };
 
-  if (erroEmpresas) {
+  if (
+    erroPerfisMasters
+  ) {
     throw new Error(
-      `Erro ao carregar empresas: ${erroEmpresas.message}`
+      `Erro ao carregar perfis dos usuários Master: ${erroPerfisMasters.message}`
     );
   }
 
-  const nomesEmpresas =
+  const perfisPorId =
     new Map(
       (
-        empresas ?? []
+        perfisMasters ?? []
       ).map(
+        (perfil) => [
+          perfil.id,
+          perfil,
+        ]
+      )
+    );
+
+  const masterPorEmpresa =
+    new Map(
+      vinculosMaster.map(
+        (vinculo) => {
+          const perfil =
+            perfisPorId.get(
+              vinculo.usuario_id
+            );
+
+          return [
+            vinculo.empresa_id,
+            {
+              nome:
+                perfil?.nome ?? "",
+              email:
+                perfil?.email ?? "",
+            },
+          ] as const;
+        }
+      )
+    );
+
+  const empresasComMaster =
+    empresas.map(
+      (empresa) => {
+        const master =
+          masterPorEmpresa.get(
+            empresa.id
+          );
+
+        return {
+          ...empresa,
+          master_nome:
+            master?.nome ?? "",
+          master_email:
+            master?.email ?? "",
+        };
+      }
+    );
+
+  const empresasFiltradas =
+    termoBusca
+      ? empresasComMaster.filter(
+          (empresa) =>
+            [
+              empresa.nome,
+              empresa.tipo_documento,
+              empresa.documento_final,
+              empresa.master_nome,
+              empresa.master_email,
+            ].some(
+              (valor) =>
+                String(
+                  valor ?? ""
+                )
+                  .toLowerCase()
+                  .includes(
+                    termoBusca
+                  )
+            )
+        )
+      : empresasComMaster;
+
+  const nomesEmpresas =
+    new Map(
+      empresas.map(
         (empresa) => [
           empresa.id,
           empresa.nome,
@@ -344,7 +514,7 @@ export default async function SuportePage() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-2xl border bg-white p-5 shadow-sm">
           <div className="flex items-center gap-3">
             <Settings2 className="h-5 w-5 text-muted-foreground" />
@@ -407,7 +577,178 @@ export default async function SuportePage() {
             Abrir fila de pagamentos
           </p>
         </Link>
+
+        <div className="rounded-2xl border bg-white p-5 shadow-sm">
+          <div className="flex items-center gap-3">
+            <Building2 className="h-5 w-5 text-muted-foreground" />
+
+            <p className="font-medium">
+              Empresas
+            </p>
+          </div>
+
+          <p className="mt-4 text-2xl font-semibold">
+            {empresas.length}
+          </p>
+
+          <p className="mt-1 text-sm text-muted-foreground">
+            Contas cadastradas na plataforma.
+          </p>
+        </div>
       </div>
+
+      <section className="rounded-2xl border bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex items-center gap-3">
+            <Building2 className="h-5 w-5 text-[#0b1f3a]" />
+
+            <div>
+              <h2 className="text-lg font-semibold">
+                Empresas
+              </h2>
+
+              <p className="text-sm text-muted-foreground">
+                Localize uma conta pelo escritório, documento ou usuário Master.
+              </p>
+            </div>
+          </div>
+
+          <form
+            method="get"
+            className="flex w-full max-w-xl flex-col gap-2 sm:flex-row"
+          >
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+
+              <input
+                type="search"
+                name="busca"
+                defaultValue={
+                  busca
+                }
+                placeholder="Empresa, documento, nome ou e-mail do Master"
+                className="w-full rounded-lg border bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-[#0b1f3a]"
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="rounded-lg bg-[#0b1f3a] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+            >
+              Buscar
+            </button>
+
+            {busca && (
+              <Link
+                href="/protected/suporte"
+                className="inline-flex items-center justify-center rounded-lg border px-4 py-2 text-sm font-medium hover:bg-slate-50"
+              >
+                Limpar
+              </Link>
+            )}
+          </form>
+        </div>
+
+        <div className="mt-5 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+          <span>
+            {empresasFiltradas.length}{" "}
+            {empresasFiltradas.length === 1
+              ? "empresa encontrada"
+              : "empresas encontradas"}
+          </span>
+
+          {busca && (
+            <>
+              <span>•</span>
+
+              <span>
+                Busca por:{" "}
+                <strong className="font-medium text-foreground">
+                  {busca}
+                </strong>
+              </span>
+            </>
+          )}
+        </div>
+
+        {empresasFiltradas.length ? (
+          <div className="mt-5 overflow-hidden rounded-xl border">
+            {empresasFiltradas.map(
+              (empresa) => (
+                <div
+                  key={
+                    empresa.id
+                  }
+                  className="border-b p-5 last:border-b-0"
+                >
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                      <p className="font-semibold">
+                        {empresa.nome}
+                      </p>
+
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {empresa.tipo_documento
+                          ? empresa.tipo_documento.toUpperCase()
+                          : "Documento"}
+                        {empresa.documento_final
+                          ? ` • final ${empresa.documento_final}`
+                          : " • não informado"}
+                      </p>
+
+                      <div className="mt-4 rounded-lg bg-slate-50 px-4 py-3">
+                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          Usuário Master
+                        </p>
+
+                        <p className="mt-1 font-medium">
+                          {empresa.master_nome ||
+                            "Master não identificado"}
+                        </p>
+
+                        <p className="mt-0.5 break-all text-sm text-muted-foreground">
+                          {empresa.master_email ||
+                            "E-mail não informado"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col items-start gap-2 lg:items-end">
+                      <span
+                        className={
+                          empresa.status_acesso ===
+                          "ativo"
+                            ? "rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-800"
+                            : "rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700"
+                        }
+                      >
+                        {empresa.status_acesso}
+                      </span>
+
+                      <p className="text-xs text-muted-foreground">
+                        Cadastro em{" "}
+                        {formatarData(
+                          empresa.criada_em
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )
+            )}
+          </div>
+        ) : (
+          <div className="mt-5 rounded-xl border border-dashed p-8 text-center">
+            <p className="font-medium">
+              Nenhuma empresa localizada
+            </p>
+
+            <p className="mt-1 text-sm text-muted-foreground">
+              Tente pesquisar pelo nome da empresa, documento, nome do Master ou login/e-mail.
+            </p>
+          </div>
+        )}
+      </section>
 
       <section className="rounded-2xl border bg-white p-6 shadow-sm">
         <div className="flex items-center gap-3">
