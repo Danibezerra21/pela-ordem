@@ -7,16 +7,19 @@ import {
 } from "next/navigation";
 
 import {
-  LayoutDashboard,
-  ClipboardList,
-  UsersRound,
+  ChartNoAxesColumnIncreasing,
   CircleAlert,
+  CircleHelp,
+  ClipboardList,
   FileSpreadsheet,
   History,
-  ChartNoAxesColumnIncreasing,
-  UserCog,
-  Settings,
+  LayoutDashboard,
+  LockKeyhole,
   LogOut,
+  Settings,
+  ShieldCheck,
+  UserCog,
+  UsersRound,
 } from "lucide-react";
 
 import {
@@ -43,6 +46,9 @@ type ItemMenu = {
 
   acessos:
     TipoAcessoSidebar[];
+
+  exigeAcessoOperacional:
+    boolean;
 };
 
 
@@ -63,6 +69,9 @@ const itensMenu:
       "master",
       "operacional",
     ],
+
+    exigeAcessoOperacional:
+      true,
   },
 
   {
@@ -80,6 +89,9 @@ const itensMenu:
       "operacional",
       "financeiro",
     ],
+
+    exigeAcessoOperacional:
+      true,
   },
 
   {
@@ -96,6 +108,9 @@ const itensMenu:
       "master",
       "operacional",
     ],
+
+    exigeAcessoOperacional:
+      true,
   },
 
   {
@@ -112,6 +127,9 @@ const itensMenu:
       "master",
       "operacional",
     ],
+
+    exigeAcessoOperacional:
+      true,
   },
 
   {
@@ -128,6 +146,9 @@ const itensMenu:
       "master",
       "operacional",
     ],
+
+    exigeAcessoOperacional:
+      true,
   },
 
   {
@@ -145,6 +166,9 @@ const itensMenu:
       "operacional",
       "financeiro",
     ],
+
+    exigeAcessoOperacional:
+      true,
   },
 
   {
@@ -160,6 +184,9 @@ const itensMenu:
     acessos: [
       "master",
     ],
+
+    exigeAcessoOperacional:
+      true,
   },
 
   {
@@ -175,6 +202,9 @@ const itensMenu:
     acessos: [
       "master",
     ],
+
+    exigeAcessoOperacional:
+      true,
   },
 
   {
@@ -190,47 +220,130 @@ const itensMenu:
     acessos: [
       "master",
     ],
+
+    exigeAcessoOperacional:
+      false,
+  },
+
+  {
+    nome:
+      "Suporte",
+
+    href:
+      "/protected/ajuda",
+
+    icone:
+      CircleHelp,
+
+    acessos: [
+      "master",
+      "operacional",
+      "financeiro",
+    ],
+
+    exigeAcessoOperacional:
+      false,
   },
 ];
 
 
 export function Sidebar({
   tipoAcesso,
+  acessoOperacional,
+  administradorPlataforma,
 }: {
   tipoAcesso:
     TipoAcessoSidebar;
-}) {
 
+  acessoOperacional:
+    boolean;
+
+  administradorPlataforma:
+    boolean;
+}) {
   const pathname =
     usePathname();
 
+
+  /*
+   * =====================================================
+   * ITENS DO CLIENTE
+   * =====================================================
+   */
 
   const itensVisiveis =
     itensMenu.filter(
       (
         item
-      ) =>
-        item
-          .acessos
-          .includes(
-            tipoAcesso
-          )
+      ) => {
+        const possuiPerfil =
+          item
+            .acessos
+            .includes(
+              tipoAcesso
+            );
+
+        if (
+          !possuiPerfil
+        ) {
+          return false;
+        }
+
+        if (
+          acessoOperacional
+        ) {
+          return true;
+        }
+
+        return (
+          !item
+            .exigeAcessoOperacional
+        );
+      }
     );
 
 
-  const hrefMarca =
+  /*
+   * =====================================================
+   * DESTINO DA MARCA
+   * =====================================================
+   */
+
+  let hrefMarca =
+    "/protected";
+
+
+  if (
+    !acessoOperacional
+  ) {
+    if (
+      administradorPlataforma
+    ) {
+      hrefMarca =
+        "/protected/suporte";
+    } else if (
+      tipoAcesso ===
+      "master"
+    ) {
+      hrefMarca =
+        "/protected/configuracoes";
+    } else {
+      hrefMarca =
+        "/protected/ajuda";
+    }
+  } else if (
     tipoAcesso ===
-      "financeiro"
-
-      ? "/protected/diligencias?filtro=pagamento_pendente"
-
-      : "/protected";
+    "financeiro"
+  ) {
+    hrefMarca =
+      "/protected/diligencias?filtro=pagamento_pendente";
+  }
 
 
   return (
     <aside className="flex min-h-screen w-72 flex-col bg-[#0b1f3a] text-white">
 
-      {/* Marca */}
+      {/* MARCA */}
 
       <div className="border-b border-white/10 px-7 py-8">
 
@@ -239,7 +352,6 @@ export function Sidebar({
             hrefMarca
           }
         >
-
           <h1 className="text-3xl font-bold tracking-tight">
             NOTE LITIS
           </h1>
@@ -247,7 +359,6 @@ export function Sidebar({
           <p className="mt-1 text-xs text-white/60">
             by Encontre Correspondente
           </p>
-
         </Link>
 
 
@@ -258,7 +369,7 @@ export function Sidebar({
       </div>
 
 
-      {/* Navegação */}
+      {/* NAVEGAÇÃO */}
 
       <nav className="flex flex-1 flex-col gap-1 px-4 py-6">
 
@@ -266,7 +377,6 @@ export function Sidebar({
           (
             item
           ) => {
-
             const Icone =
               item.icone;
 
@@ -297,22 +407,75 @@ export function Sidebar({
                     : "text-white/70 hover:bg-white/5 hover:text-white"
                 }`}
               >
-
                 <Icone className="h-4 w-4" />
 
                 <span>
                   {item.nome}
                 </span>
-
               </Link>
             );
           }
         )}
 
+
+        {/* ADMINISTRAÇÃO DA PLATAFORMA */}
+
+        {administradorPlataforma && (
+          <Link
+            href="/protected/suporte"
+            className={`flex items-center gap-3 rounded-lg px-4 py-3 text-sm transition-colors ${
+              pathname.startsWith(
+                "/protected/suporte"
+              )
+                ? "bg-white/10 font-medium text-white"
+                : "text-white/70 hover:bg-white/5 hover:text-white"
+            }`}
+          >
+            <ShieldCheck className="h-4 w-4" />
+
+            <span>
+              Administração
+            </span>
+          </Link>
+        )}
+
+
+        {/* AVISO COMERCIAL */}
+
+        {!acessoOperacional && (
+          <div className="mt-5 rounded-xl border border-white/15 bg-white/5 p-4">
+
+            <div className="flex items-start gap-3">
+
+              <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0 text-white/70" />
+
+              <div>
+                <p className="text-sm font-medium text-white">
+                  Acesso operacional indisponível
+                </p>
+
+                {tipoAcesso ===
+                "master" ? (
+                  <p className="mt-1 text-xs leading-5 text-white/60">
+                    Regularize a mensalidade em Configurações para liberar novamente as funções operacionais.
+                  </p>
+                ) : (
+                  <p className="mt-1 text-xs leading-5 text-white/60">
+                    A mensalidade da empresa precisa ser regularizada pelo usuário Master.
+                  </p>
+                )}
+
+              </div>
+
+            </div>
+
+          </div>
+        )}
+
       </nav>
 
 
-      {/* Rodapé */}
+      {/* RODAPÉ */}
 
       <div className="border-t border-white/10 px-4 py-5">
 
@@ -321,20 +484,16 @@ export function Sidebar({
             sair
           }
         >
-
           <button
             type="submit"
             className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-sm text-white/70 transition-colors hover:bg-white/5 hover:text-white"
           >
-
             <LogOut className="h-4 w-4" />
 
             <span>
               Sair
             </span>
-
           </button>
-
         </form>
 
 

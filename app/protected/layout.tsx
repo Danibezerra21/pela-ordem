@@ -12,8 +12,34 @@ import {
 } from "@/components/pela-ordem/sidebar";
 
 import {
+  createAdminClient,
+} from "@/lib/supabase/admin";
+
+import {
   createClient,
 } from "@/lib/supabase/server";
+
+
+function hojeEmRecife() {
+  return new Intl.DateTimeFormat(
+    "en-CA",
+    {
+      timeZone:
+        "America/Recife",
+
+      year:
+        "numeric",
+
+      month:
+        "2-digit",
+
+      day:
+        "2-digit",
+    }
+  ).format(
+    new Date()
+  );
+}
 
 
 export default async function ProtectedLayout({
@@ -25,6 +51,12 @@ export default async function ProtectedLayout({
   const supabase =
     await createClient();
 
+
+  /*
+   * =====================================================
+   * AUTENTICAÇÃO
+   * =====================================================
+   */
 
   const {
     data:
@@ -56,6 +88,12 @@ export default async function ProtectedLayout({
       .sub;
 
 
+  /*
+   * =====================================================
+   * VÍNCULO
+   * =====================================================
+   */
+
   const {
     data:
       membro,
@@ -67,9 +105,12 @@ export default async function ProtectedLayout({
       .from(
         "membros_empresa"
       )
-      .select(
-        "papel, nucleo, ativo"
-      )
+      .select(`
+        empresa_id,
+        papel,
+        nucleo,
+        ativo
+      `)
       .eq(
         "usuario_id",
         usuarioId
@@ -99,6 +140,12 @@ export default async function ProtectedLayout({
   }
 
 
+  /*
+   * =====================================================
+   * PERFIL DA SIDEBAR
+   * =====================================================
+   */
+
   let tipoAcesso:
     TipoAcessoSidebar;
 
@@ -121,24 +168,164 @@ export default async function ProtectedLayout({
   }
 
 
+  /*
+   * =====================================================
+   * SITUAÇÃO COMERCIAL
+   * =====================================================
+   */
+
+  const admin =
+    createAdminClient();
+
+
+  const [
+    configuracaoResposta,
+    contaResposta,
+    administradorResposta,
+  ] =
+    await Promise.all([
+      admin
+        .from(
+          "configuracoes_plataforma"
+        )
+        .select(
+          "beta_ativa"
+        )
+        .eq(
+          "id",
+          true
+        )
+        .maybeSingle(),
+
+      admin
+        .from(
+          "contas_comerciais"
+        )
+        .select(
+          "acesso_pago_ate"
+        )
+        .eq(
+          "empresa_id",
+          membro.empresa_id
+        )
+        .maybeSingle(),
+
+      admin
+        .from(
+          "administradores_plataforma"
+        )
+        .select(
+          "id"
+        )
+        .eq(
+          "usuario_id",
+          usuarioId
+        )
+        .eq(
+          "ativo",
+          true
+        )
+        .maybeSingle(),
+    ]);
+
+
+  /*
+   * Em caso de falha temporária de
+   * consulta da configuração global,
+   * evitamos bloquear todo o sistema.
+   */
+  const betaAtiva =
+    configuracaoResposta
+      .error
+      ? true
+      : (
+          configuracaoResposta
+            .data
+            ?.beta_ativa ??
+          true
+        );
+
+
+  let acessoOperacional =
+    true;
+
+
+  if (
+    !betaAtiva
+  ) {
+    if (
+      contaResposta
+        .error
+    ) {
+      /*
+       * Fail-open apenas para falha
+       * técnica inesperada.
+       */
+      acessoOperacional =
+        true;
+    } else {
+      const hoje =
+        hojeEmRecife();
+
+      const acessoPagoAte =
+        contaResposta
+          .data
+          ?.acesso_pago_ate ??
+        null;
+
+      acessoOperacional =
+        Boolean(
+          acessoPagoAte &&
+          acessoPagoAte >=
+            hoje
+        );
+    }
+  }
+
+
+  const administradorPlataforma =
+    !administradorResposta
+      .error &&
+    Boolean(
+      administradorResposta
+        .data
+    );
+
+
   return (
     <div className="min-h-screen bg-background">
+
       <div className="flex min-h-screen">
-        <Suspense fallback={null}>
+
+        <Suspense
+          fallback={
+            null
+          }
+        >
           <Sidebar
             tipoAcesso={
               tipoAcesso
+            }
+            acessoOperacional={
+              acessoOperacional
+            }
+            administradorPlataforma={
+              administradorPlataforma
             }
           />
         </Suspense>
 
 
         <div className="min-w-0 flex-1">
+
           <main className="mx-auto w-full max-w-7xl px-8 py-10">
             {children}
           </main>
+
         </div>
+
       </div>
+
     </div>
   );
 }
