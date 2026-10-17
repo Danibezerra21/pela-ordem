@@ -17,6 +17,8 @@ import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
+import { ExportarClientes } from "./exportar-clientes";
+
 function formatarData(
   valor:
     | string
@@ -677,6 +679,98 @@ export default async function InteligenciaPage() {
       0
     );
 
+  const pagamentosPorEmpresa =
+    new Map<
+      string,
+      {
+        confirmados: number;
+        valorTotalPago: number;
+        aguardandoConfirmacao: number;
+        naoLocalizados: number;
+        ultimoPagamentoConfirmado:
+          | string
+          | null;
+      }
+    >();
+
+  for (
+    const pagamento
+    of pagamentos
+  ) {
+    const atual =
+      pagamentosPorEmpresa.get(
+        pagamento.empresa_id
+      ) ?? {
+        confirmados: 0,
+        valorTotalPago: 0,
+        aguardandoConfirmacao: 0,
+        naoLocalizados: 0,
+        ultimoPagamentoConfirmado:
+          null,
+      };
+
+    if (
+      pagamento.status ===
+      "confirmado"
+    ) {
+      atual.confirmados +=
+        1;
+
+      atual.valorTotalPago +=
+        Number(
+          pagamento.valor ??
+            0
+        );
+
+      if (
+        pagamento.atualizado_em
+      ) {
+        const dataAtual =
+          atual
+            .ultimoPagamentoConfirmado
+            ? new Date(
+                atual
+                  .ultimoPagamentoConfirmado
+              ).getTime()
+            : 0;
+
+        const novaData =
+          new Date(
+            pagamento.atualizado_em
+          ).getTime();
+
+        if (
+          novaData >
+          dataAtual
+        ) {
+          atual.ultimoPagamentoConfirmado =
+            pagamento.atualizado_em;
+        }
+      }
+    }
+
+    if (
+      pagamento.status ===
+      "aguardando_confirmacao"
+    ) {
+      atual.aguardandoConfirmacao +=
+        1;
+    }
+
+    if (
+      pagamento.status ===
+      "nao_localizado"
+    ) {
+      atual.naoLocalizados +=
+        1;
+    }
+
+    pagamentosPorEmpresa.set(
+      pagamento.empresa_id,
+      atual
+    );
+  }
+
   const pagamentosConfirmados =
     pagamentos.filter(
       (pagamento) =>
@@ -765,12 +859,25 @@ export default async function InteligenciaPage() {
               empresa.id
             );
 
+          const financeiro =
+            pagamentosPorEmpresa.get(
+              empresa.id
+            ) ?? {
+              confirmados: 0,
+              valorTotalPago: 0,
+              aguardandoConfirmacao: 0,
+              naoLocalizados: 0,
+              ultimoPagamentoConfirmado:
+                null,
+            };
+
           return {
             ...empresa,
             usuarios,
             volume,
             atividade,
             conta,
+            financeiro,
           };
         }
       )
@@ -814,6 +921,130 @@ export default async function InteligenciaPage() {
           );
         }
       );
+
+  const clientesParaExportacao =
+    clientes.map(
+      (cliente) => {
+        const cadastroTimestamp =
+          new Date(
+            cliente.criada_em
+          ).getTime();
+
+        const diasDesdeCadastro =
+          Number.isFinite(
+            cadastroTimestamp
+          )
+            ? Math.max(
+                0,
+                Math.floor(
+                  (
+                    agora.getTime() -
+                    cadastroTimestamp
+                  ) /
+                    (
+                      24 *
+                      60 *
+                      60 *
+                      1000
+                    )
+                )
+              )
+            : 0;
+
+        return {
+          cliente:
+            cliente.nome,
+
+          cadastradaEm:
+            cliente.criada_em,
+
+          diasDesdeCadastro,
+
+          statusAcesso:
+            cliente.status_acesso,
+
+          statusComercial:
+            cliente.conta
+              ?.status_comercial ??
+            "",
+
+          usuariosAtivos:
+            cliente
+              .usuarios
+              .ativos,
+
+          usuariosCadastrados:
+            cliente
+              .usuarios
+              .total,
+
+          diligenciasTotal:
+            cliente
+              .volume
+              .total,
+
+          diligenciasUltimos30Dias:
+            cliente
+              .volume
+              .ultimos30,
+
+          diasAtivosUltimos30Dias:
+            cliente
+              .atividade
+              ?.dias30
+              .size ??
+            0,
+
+          ativaUltimos7Dias:
+            cliente
+              .atividade
+              ?.ativa7 ??
+            false,
+
+          ativaUltimos30Dias:
+            cliente
+              .atividade
+              ?.ativa30 ??
+            false,
+
+          ultimaAtividade:
+            cliente
+              .atividade
+              ?.ultimaAtividade ??
+            null,
+
+          acessoPagoAte:
+            cliente.conta
+              ?.acesso_pago_ate ??
+            null,
+
+          pagamentosConfirmados:
+            cliente
+              .financeiro
+              .confirmados,
+
+          valorTotalPago:
+            cliente
+              .financeiro
+              .valorTotalPago,
+
+          pagamentosAguardandoConfirmacao:
+            cliente
+              .financeiro
+              .aguardandoConfirmacao,
+
+          pagamentosNaoLocalizados:
+            cliente
+              .financeiro
+              .naoLocalizados,
+
+          ultimoPagamentoConfirmado:
+            cliente
+              .financeiro
+              .ultimoPagamentoConfirmado,
+        };
+      }
+    );
 
   const pagamentosExibidos =
     pagamentos.slice(
@@ -1009,15 +1240,23 @@ export default async function InteligenciaPage() {
       </section>
 
       <section className="rounded-2xl border bg-white p-6 shadow-sm">
-        <div>
-          <h2 className="text-lg font-semibold">
-            Clientes
-          </h2>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold">
+              Clientes
+            </h2>
 
-          <p className="mt-1 text-sm leading-6 text-muted-foreground">
-            A atividade representa dias em que houve ação registrada na auditoria do sistema.
-            Ela mede uso operacional e não simples acesso ou visualização de páginas.
-          </p>
+            <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
+              A atividade representa dias em que houve ação registrada na auditoria do sistema.
+              Ela mede uso operacional e não simples acesso ou visualização de páginas.
+            </p>
+          </div>
+
+          <ExportarClientes
+            clientes={
+              clientesParaExportacao
+            }
+          />
         </div>
 
         {clientes.length ? (
