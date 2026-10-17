@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import {
+  AlertTriangle,
   BadgeCheck,
   Building2,
   CalendarDays,
@@ -16,6 +17,7 @@ import {
 } from "lucide-react";
 
 import { informarPagamentoPix } from "./actions";
+import { LoadingButton } from "@/components/ui/loading-button";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -210,7 +212,7 @@ export default async function ConfiguracoesPage() {
       }
     | null = null;
 
-  let pagamentoPendente:
+  let pagamentoManual:
     | {
         id: string;
         valor: number | string;
@@ -245,10 +247,20 @@ export default async function ConfiguracoesPage() {
           nome_pagador
         `)
         .eq("empresa_id", empresaId)
-        .eq(
+        .in(
           "status",
-          "aguardando_confirmacao"
+          [
+            "aguardando_confirmacao",
+            "nao_localizado",
+          ]
         )
+        .order(
+          "declarado_em",
+          {
+            ascending: false,
+          }
+        )
+        .limit(1)
         .maybeSingle(),
     ]);
 
@@ -265,9 +277,21 @@ export default async function ConfiguracoesPage() {
     }
 
     conta = contaResposta.data;
-    pagamentoPendente =
+    pagamentoManual =
       pagamentoResposta.data;
   }
+
+  const pagamentoPendente =
+    pagamentoManual?.status ===
+    "aguardando_confirmacao"
+      ? pagamentoManual
+      : null;
+
+  const pagamentoNaoLocalizado =
+    pagamentoManual?.status ===
+    "nao_localizado"
+      ? pagamentoManual
+      : null;
 
   return (
     <div className="space-y-8">
@@ -515,7 +539,48 @@ export default async function ConfiguracoesPage() {
             </div>
           )}
 
-          {!pagamentoPendente && (
+          {pagamentoNaoLocalizado && (
+            <div className="mt-5 rounded-xl border border-red-200 bg-red-50 p-5">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-700" />
+
+                <div>
+                  <p className="font-semibold text-red-950">
+                    Pagamento não confirmado
+                  </p>
+
+                  <p className="mt-2 text-sm leading-6 text-red-900/80">
+                    Não foi possível localizar ou confirmar o pagamento de{" "}
+                    <strong>
+                      {formatarMoeda(
+                        pagamentoNaoLocalizado.valor
+                      )}
+                    </strong>
+                    . Caso o pagamento tenha sido realizado, envie o comprovante para{" "}
+                    <strong>
+                      contato@encontrecorrespondente.com.br
+                    </strong>
+                    .
+                  </p>
+
+                  <p className="mt-3 text-sm leading-6 text-red-900/80">
+                    A conferência e a liberação do acesso serão realizadas em dias úteis,
+                    dentro do nosso horário de atendimento, das{" "}
+                    <strong>8h às 18h</strong>. Comprovantes enviados fora desse período
+                    serão analisados no próximo dia útil.
+                  </p>
+
+                  <p className="mt-3 text-xs text-red-800/70">
+                    Pagador informado:{" "}
+                    {pagamentoNaoLocalizado.nome_pagador}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!pagamentoPendente &&
+            !pagamentoNaoLocalizado && (
             <div className="mt-6 rounded-xl border border-dashed p-6">
               <p className="font-semibold">
                 Pagamento via Pix
@@ -622,12 +687,13 @@ export default async function ConfiguracoesPage() {
                       />
                     </div>
 
-                    <button
+                    <LoadingButton
                       type="submit"
-                      className="rounded-lg bg-[#0b1f3a] px-5 py-2.5 text-sm font-medium text-white hover:opacity-90"
+                      loadingText="Enviando..."
+                      className="inline-flex items-center gap-2 rounded-lg bg-[#0b1f3a] px-5 py-2.5 text-sm font-medium text-white hover:opacity-90"
                     >
                       Já realizei o pagamento
-                    </button>
+                    </LoadingButton>
                   </form>
                 </div>
               </div>
