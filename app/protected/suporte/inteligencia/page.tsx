@@ -278,8 +278,7 @@ export default async function InteligenciaPage() {
         )
         .select(`
           id,
-          empresa_id,
-          criado_em
+          empresa_id
         `)
         .is(
           "excluida_em",
@@ -293,6 +292,8 @@ export default async function InteligenciaPage() {
         .select(`
           empresa_id,
           usuario_id,
+          acao,
+          entidade_tipo,
           criado_em
         `)
         .order(
@@ -517,15 +518,6 @@ export default async function InteligenciaPage() {
 
     atual.total += 1;
 
-    if (
-      new Date(
-        diligencia.criado_em
-      ).getTime() >=
-      inicio30Timestamp
-    ) {
-      atual.ultimos30 += 1;
-    }
-
     diligenciasPorEmpresa.set(
       diligencia.empresa_id,
       atual
@@ -595,6 +587,32 @@ export default async function InteligenciaPage() {
           registro.criado_em
         )
       );
+
+      if (
+        registro.entidade_tipo ===
+          "diligencia" &&
+        String(
+          registro.acao ?? ""
+        ).includes(
+          "CRIAD"
+        )
+      ) {
+        const volume =
+          diligenciasPorEmpresa.get(
+            empresaId
+          ) ?? {
+            total: 0,
+            ultimos30: 0,
+          };
+
+        volume.ultimos30 +=
+          1;
+
+        diligenciasPorEmpresa.set(
+          empresaId,
+          volume
+        );
+      }
     }
 
     if (
@@ -647,13 +665,17 @@ export default async function InteligenciaPage() {
     ).length;
 
   const diligencias30 =
-    diligencias.filter(
-      (diligencia) =>
-        new Date(
-          diligencia.criado_em
-        ).getTime() >=
-        inicio30Timestamp
-    ).length;
+    Array.from(
+      diligenciasPorEmpresa.values()
+    ).reduce(
+      (
+        total,
+        volume
+      ) =>
+        total +
+        volume.ultimos30,
+      0
+    );
 
   const pagamentosConfirmados =
     pagamentos.filter(
