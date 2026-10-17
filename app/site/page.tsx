@@ -129,7 +129,7 @@ function LinhaInstitucional() {
 
 export default function SitePage() {
   return (
-    <main className="min-h-screen bg-[#fbfbfa] font-sans text-slate-900">
+    <main className="min-h-screen bg-[#fbfbfa] text-slate-900">
 
       {/* =================================================
           CABEÇALHO
@@ -216,7 +216,7 @@ export default function SitePage() {
 
             <p className="mt-7 max-w-3xl text-lg leading-8 text-slate-600">
               O NOTE LITIS organiza diligências, participantes, pendências e
-              conflitos em uma única operação — para que o escritório trabalhe
+              conflitos em uma única operação, para que o escritório trabalhe
               com mais previsibilidade, segurança e clareza.
             </p>
 
