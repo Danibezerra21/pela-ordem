@@ -13,7 +13,6 @@ import {
   Gavel,
   History,
   LockKeyhole,
-  Scale,
   ShieldCheck,
   UsersRound,
 } from "lucide-react";
@@ -108,20 +107,14 @@ const perguntas = [
 
 function Marca() {
   return (
-    <div className="flex items-center gap-3">
-      <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-[#10243e]">
-        <Scale className="h-5 w-5" />
-      </div>
+    <div className="leading-tight">
+      <p className="text-lg font-semibold tracking-[0.08em] text-[#10243e]">
+        NOTE LITIS
+      </p>
 
-      <div>
-        <p className="font-serif text-lg font-semibold tracking-[0.08em] text-[#10243e]">
-          NOTE LITIS
-        </p>
-
-        <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
-          Gestão de Diligências
-        </p>
-      </div>
+      <p className="mt-0.5 text-[11px] uppercase tracking-[0.18em] text-slate-500">
+        Gestão de Diligências
+      </p>
     </div>
   );
 }
@@ -136,7 +129,7 @@ function LinhaInstitucional() {
 
 export default function SitePage() {
   return (
-    <main className="min-h-screen bg-[#fbfbfa] text-slate-900">
+    <main className="min-h-screen bg-[#fbfbfa] font-sans text-slate-900">
 
       {/* =================================================
           CABEÇALHO
@@ -217,7 +210,7 @@ export default function SitePage() {
               </p>
             </div>
 
-            <h1 className="max-w-4xl font-serif text-4xl font-semibold leading-[1.12] tracking-[-0.025em] text-[#10243e] sm:text-5xl lg:text-[3.65rem]">
+            <h1 className="max-w-4xl text-4xl font-semibold leading-[1.12] tracking-[-0.025em] text-[#10243e] sm:text-5xl lg:text-[3.65rem]">
               Controle de pauta para quem não pode descobrir um problema tarde demais.
             </h1>
 
@@ -275,7 +268,7 @@ export default function SitePage() {
                   Visão operacional
                 </p>
 
-                <p className="mt-1 font-serif text-xl font-semibold text-[#10243e]">
+                <p className="mt-1 text-xl font-semibold text-[#10243e]">
                   Pauta do escritório
                 </p>
               </div>
@@ -289,7 +282,7 @@ export default function SitePage() {
                   Diligências
                 </p>
 
-                <p className="mt-2 font-serif text-2xl font-semibold text-[#10243e]">
+                <p className="mt-2 text-2xl font-semibold text-[#10243e]">
                   148
                 </p>
               </div>
@@ -299,7 +292,7 @@ export default function SitePage() {
                   Pendências
                 </p>
 
-                <p className="mt-2 font-serif text-2xl font-semibold text-[#10243e]">
+                <p className="mt-2 text-2xl font-semibold text-[#10243e]">
                   12
                 </p>
               </div>
@@ -309,7 +302,7 @@ export default function SitePage() {
                   Conflitos
                 </p>
 
-                <p className="mt-2 font-serif text-2xl font-semibold text-[#10243e]">
+                <p className="mt-2 text-2xl font-semibold text-[#10243e]">
                   03
                 </p>
               </div>
@@ -348,7 +341,7 @@ export default function SitePage() {
                     className="flex items-center justify-between gap-4 px-4 py-3.5"
                   >
                     <div className="flex items-center gap-3">
-                      <span className="font-serif text-xs text-slate-400">
+                      <span className="text-xs text-slate-400">
                         0{indice + 1}
                       </span>
 
@@ -382,7 +375,7 @@ export default function SitePage() {
                 O desafio da operação
               </p>
 
-              <h2 className="mt-4 font-serif text-3xl font-semibold leading-tight text-[#10243e] sm:text-4xl">
+              <h2 className="mt-4 text-3xl font-semibold leading-tight text-[#10243e] sm:text-4xl">
                 Quando a pauta cresce, o risco não está apenas no volume.
               </h2>
             </div>
@@ -422,7 +415,7 @@ export default function SitePage() {
                       <Icone className="h-5 w-5" />
                     </div>
 
-                    <h3 className="mt-5 font-serif text-xl font-semibold text-[#10243e]">
+                    <h3 className="mt-5 text-xl font-semibold text-[#10243e]">
                       {item.titulo}
                     </h3>
 
@@ -452,7 +445,7 @@ export default function SitePage() {
               Um ponto crítico da controladoria
             </p>
 
-            <h2 className="mt-4 font-serif text-3xl font-semibold leading-tight text-[#10243e] sm:text-4xl">
+            <h2 className="mt-4 text-3xl font-semibold leading-tight text-[#10243e] sm:text-4xl">
               O conflito que o escritório identifica antes custa menos do que o conflito descoberto na última hora.
             </h2>
 
@@ -559,7 +552,7 @@ export default function SitePage() {
                 Uma operação em um só lugar
               </p>
 
-              <h2 className="mt-4 font-serif text-3xl font-semibold leading-tight text-[#10243e] sm:text-4xl">
+              <h2 className="mt-4 text-3xl font-semibold leading-tight text-[#10243e] sm:text-4xl">
                 Menos reconstrução. Mais continuidade.
               </h2>
 
@@ -595,7 +588,7 @@ export default function SitePage() {
             <div className="rounded-xl border border-slate-200 bg-[#fbfbfa] p-6">
               <BriefcaseBusiness className="h-5 w-5 text-[#10243e]" />
 
-              <h3 className="mt-4 font-serif text-lg font-semibold text-[#10243e]">
+              <h3 className="mt-4 text-lg font-semibold text-[#10243e]">
                 Equipe interna
               </h3>
 
@@ -607,7 +600,7 @@ export default function SitePage() {
             <div className="rounded-xl border border-slate-200 bg-[#fbfbfa] p-6">
               <UsersRound className="h-5 w-5 text-[#10243e]" />
 
-              <h3 className="mt-4 font-serif text-lg font-semibold text-[#10243e]">
+              <h3 className="mt-4 text-lg font-semibold text-[#10243e]">
                 Correspondentes externos
               </h3>
 
@@ -619,7 +612,7 @@ export default function SitePage() {
             <div className="rounded-xl border border-slate-200 bg-[#fbfbfa] p-6">
               <FileSpreadsheet className="h-5 w-5 text-[#10243e]" />
 
-              <h3 className="mt-4 font-serif text-lg font-semibold text-[#10243e]">
+              <h3 className="mt-4 text-lg font-semibold text-[#10243e]">
                 Pautas em volume
               </h3>
 
@@ -641,8 +634,8 @@ export default function SitePage() {
           <div>
             <Gavel className="h-7 w-7 text-slate-300" />
 
-            <h2 className="mt-5 font-serif text-3xl font-semibold leading-tight sm:text-4xl">
-              Tecnologia sem perder a sobriedade que a advocacia exige.
+            <h2 className="mt-5 text-3xl font-semibold leading-tight sm:text-4xl">
+              Tecnologia com a seriedade que a advocacia exige.
             </h2>
           </div>
 
@@ -668,7 +661,7 @@ export default function SitePage() {
               },
               {
                 icone:
-                  Scale,
+                  BadgeCheck,
                 texto:
                   "Termos de Uso e Política de Privacidade disponíveis ao usuário.",
               },
@@ -714,7 +707,7 @@ export default function SitePage() {
                   {OFERTA_COMERCIAL.rotulo}
                 </p>
 
-                <h2 className="mt-4 font-serif text-3xl font-semibold leading-tight text-[#10243e]">
+                <h2 className="mt-4 text-3xl font-semibold leading-tight text-[#10243e]">
                   {OFERTA_COMERCIAL.destaque}
                 </h2>
 
@@ -730,11 +723,7 @@ export default function SitePage() {
 
             <LinhaInstitucional />
 
-            <div className="mt-7 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="text-sm text-slate-500">
-                Cadastro realizado diretamente no ambiente do NOTE LITIS.
-              </div>
-
+            <div className="mt-7 flex justify-end">
               <Link
                 href="/auth/sign-up"
                 className="inline-flex items-center justify-center gap-2 rounded-md bg-[#10243e] px-6 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-[#183455]"
@@ -763,7 +752,7 @@ export default function SitePage() {
               Perguntas frequentes
             </p>
 
-            <h2 className="mt-4 font-serif text-3xl font-semibold text-[#10243e] sm:text-4xl">
+            <h2 className="mt-4 text-3xl font-semibold text-[#10243e] sm:text-4xl">
               Informações objetivas antes de começar.
             </h2>
           </div>
@@ -802,7 +791,7 @@ export default function SitePage() {
         <div className="mx-auto max-w-7xl px-5 py-20 sm:px-8">
           <div className="flex flex-col gap-8 border-y border-slate-200 py-10 lg:flex-row lg:items-center lg:justify-between">
             <div className="max-w-3xl">
-              <p className="font-serif text-2xl font-semibold text-[#10243e] sm:text-3xl">
+              <p className="text-2xl font-semibold text-[#10243e] sm:text-3xl">
                 Uma pauta bem administrada começa pela clareza da operação.
               </p>
 
