@@ -1,16 +1,5 @@
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import SitePage from "./site/page";
 
-export default async function Home() {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (user) {
-    redirect("/protected");
-  }
-
-  redirect("/auth/login");
+export default function HomePage() {
+  return <SitePage />;
 }
