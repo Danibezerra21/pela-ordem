@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import {
+  Activity,
   Bug,
   Building2,
   CalendarDays,
@@ -514,7 +515,7 @@ export default async function SuportePage({
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <div className="rounded-2xl border bg-white p-5 shadow-sm">
           <div className="flex items-center gap-3">
             <Settings2 className="h-5 w-5 text-muted-foreground" />
@@ -595,6 +596,31 @@ export default async function SuportePage({
             Contas cadastradas na plataforma.
           </p>
         </div>
+
+        <Link
+          href="/protected/suporte/inteligencia"
+          className="block rounded-2xl border bg-white p-5 shadow-sm transition-colors hover:bg-slate-50"
+        >
+          <div className="flex items-center gap-3">
+            <Activity className="h-5 w-5 text-muted-foreground" />
+
+            <p className="font-medium">
+              Inteligência
+            </p>
+          </div>
+
+          <p className="mt-4 text-2xl font-semibold">
+            Indicadores
+          </p>
+
+          <p className="mt-1 text-sm text-muted-foreground">
+            Clientes, utilização e pagamentos.
+          </p>
+
+          <p className="mt-3 text-xs font-medium text-[#0b1f3a]">
+            Abrir inteligência
+          </p>
+        </Link>
       </div>
 
       <section className="rounded-2xl border bg-white p-6 shadow-sm">
