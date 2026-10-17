@@ -23,6 +23,10 @@ import {
   createClient,
 } from "@/lib/supabase/server";
 
+import {
+  LoadingButton,
+} from "@/components/ui/loading-button";
+
 
 type AjudaPageProps = {
   searchParams?:
@@ -587,12 +591,13 @@ export default async function AjudaPage({
 
             <div className="flex justify-end">
 
-              <button
+              <LoadingButton
                 type="submit"
-                className="inline-flex items-center justify-center rounded-lg bg-[#0b1f3a] px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+                loadingText="Abrindo chamado..."
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#0b1f3a] px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
               >
                 Abrir chamado
-              </button>
+              </LoadingButton>
 
             </div>
 

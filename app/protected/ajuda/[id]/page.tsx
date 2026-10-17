@@ -25,6 +25,10 @@ import {
   createClient,
 } from "@/lib/supabase/server";
 
+import {
+  LoadingButton,
+} from "@/components/ui/loading-button";
+
 
 type ChamadoPageProps = {
   params:
@@ -663,8 +667,13 @@ export default async function ChamadoPage({
 
           <div className="mt-4 flex justify-end">
 
-            <button
+            <LoadingButton
               type="submit"
+              loadingText={
+                resolvido
+                  ? "Reabrindo..."
+                  : "Enviando..."
+              }
               className="inline-flex items-center gap-2 rounded-lg bg-[#0b1f3a] px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
             >
               <Send className="h-4 w-4" />
@@ -672,7 +681,7 @@ export default async function ChamadoPage({
               {resolvido
                 ? "Reabrir e enviar"
                 : "Enviar mensagem"}
-            </button>
+            </LoadingButton>
 
           </div>
 
