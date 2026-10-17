@@ -1,260 +1,640 @@
 "use server";
 
-import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
+import {
+  redirect,
+} from "next/navigation";
 
-import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
+import {
+  revalidatePath,
+} from "next/cache";
 
-async function obterContextoUsuario() {
-  const supabase = await createClient();
+import {
+  createAdminClient,
+} from "@/lib/supabase/admin";
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
+import {
+  createClient,
+} from "@/lib/supabase/server";
 
-  if (authError || !user) {
-    throw new Error("Usuário não autenticado.");
-  }
 
-  const {
-    data: membro,
-    error: erroMembro,
-  } = await supabase
-    .from("membros_empresa")
-    .select("empresa_id")
-    .eq("usuario_id", user.id)
-    .eq("ativo", true)
-    .maybeSingle();
-
-  if (erroMembro || !membro) {
-    throw new Error(
-      "Não foi possível identificar sua empresa."
-    );
-  }
-
-  const {
-    data: perfil,
-  } = await supabase
-    .from("perfis_usuarios")
-    .select("email")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  return {
-    admin: createAdminClient(),
-    user,
-    empresaId: membro.empresa_id,
-    email:
-      perfil?.email ??
-      user.email ??
-      "",
-  };
-}
-
-export async function abrirChamado(
-  formData: FormData
-) {
-  const {
-    admin,
-    user,
-    empresaId,
-    email,
-  } = await obterContextoUsuario();
-
-  const categoria =
-    String(
-      formData.get("categoria") ?? ""
-    ).trim();
-
-  const assunto =
-    String(
-      formData.get("assunto") ?? ""
-    ).trim();
-
-  const descricao =
-    String(
-      formData.get("descricao") ?? ""
-    ).trim();
-
-  const whatsapp =
-    String(
-      formData.get("whatsapp") ?? ""
-    ).trim();
-
-  const paginaOrigem =
-    String(
-      formData.get("pagina_origem") ?? ""
-    ).trim();
-
-  const categoriasPermitidas = [
+const CATEGORIAS_VALIDAS =
+  new Set([
     "problema_tecnico",
     "duvida_utilizacao",
     "sugestao",
     "outro",
-  ];
+  ]);
+
+
+function lerCampo(
+  formData:
+    FormData,
+
+  nome:
+    string
+) {
+  const valor =
+    formData.get(
+      nome
+    );
+
+  return typeof valor ===
+    "string"
+      ? valor.trim()
+      : "";
+}
+
+
+function somenteNumeros(
+  valor:
+    string
+) {
+  return valor.replace(
+    /\D/g,
+    ""
+  );
+}
+
+
+function uuidValido(
+  valor:
+    string
+) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    valor
+  );
+}
+
+
+function redirecionarErro(
+  caminho:
+    string,
+
+  mensagem:
+    string
+): never {
+  redirect(
+    `${caminho}?erro=${encodeURIComponent(
+      mensagem
+    )}`
+  );
+}
+
+
+async function obterContextoUsuario() {
+  const supabase =
+    await createClient();
+
+
+  const {
+    data:
+      authData,
+
+    error:
+      authError,
+  } =
+    await supabase
+      .auth
+      .getClaims();
+
 
   if (
-    !categoriasPermitidas.includes(
-      categoria
-    )
+    authError ||
+    !authData
+      ?.claims
+      ?.sub
+  ) {
+    redirect(
+      "/auth/login"
+    );
+  }
+
+
+  const usuarioId =
+    authData
+      .claims
+      .sub;
+
+
+  const admin =
+    createAdminClient();
+
+
+  const {
+    data:
+      membro,
+
+    error:
+      erroMembro,
+  } =
+    await admin
+      .from(
+        "membros_empresa"
+      )
+      .select(`
+        empresa_id,
+        papel,
+        nucleo,
+        ativo
+      `)
+      .eq(
+        "usuario_id",
+        usuarioId
+      )
+      .eq(
+        "ativo",
+        true
+      )
+      .maybeSingle();
+
+
+  if (
+    erroMembro
   ) {
     throw new Error(
+      `Não foi possível identificar sua empresa: ${erroMembro.message}`
+    );
+  }
+
+
+  if (
+    !membro
+  ) {
+    redirect(
+      "/auth/onboarding"
+    );
+  }
+
+
+  const {
+    data:
+      perfil,
+
+    error:
+      erroPerfil,
+  } =
+    await admin
+      .from(
+        "perfis_usuarios"
+      )
+      .select(`
+        nome,
+        email
+      `)
+      .eq(
+        "id",
+        usuarioId
+      )
+      .maybeSingle();
+
+
+  if (
+    erroPerfil
+  ) {
+    throw new Error(
+      `Não foi possível identificar seu perfil: ${erroPerfil.message}`
+    );
+  }
+
+
+  const emailClaim =
+    typeof authData
+      .claims
+      .email ===
+      "string"
+      ? authData
+          .claims
+          .email
+          .trim()
+      : "";
+
+
+  const email =
+    perfil?.email
+      ?.trim() ||
+    emailClaim;
+
+
+  return {
+    admin,
+
+    usuarioId,
+
+    empresaId:
+      membro
+        .empresa_id,
+
+    email,
+
+    nome:
+      perfil?.nome ||
+      "",
+  };
+}
+
+
+/* =====================================================
+   ABRIR CHAMADO
+===================================================== */
+
+export async function abrirChamado(
+  formData:
+    FormData
+) {
+  const {
+    admin,
+    usuarioId,
+    empresaId,
+    email,
+  } =
+    await obterContextoUsuario();
+
+
+  const categoria =
+    lerCampo(
+      formData,
+      "categoria"
+    );
+
+
+  const assunto =
+    lerCampo(
+      formData,
+      "assunto"
+    );
+
+
+  const descricao =
+    lerCampo(
+      formData,
+      "descricao"
+    );
+
+
+  const whatsapp =
+    lerCampo(
+      formData,
+      "whatsapp"
+    );
+
+
+  if (
+    !CATEGORIAS_VALIDAS
+      .has(
+        categoria
+      )
+  ) {
+    redirecionarErro(
+      "/protected/ajuda",
       "Selecione uma categoria válida."
     );
   }
 
-  if (assunto.length < 3) {
-    throw new Error(
-      "Informe o assunto do chamado."
+
+  if (
+    assunto.length <
+    5
+  ) {
+    redirecionarErro(
+      "/protected/ajuda",
+      "Informe um assunto com pelo menos 5 caracteres."
     );
   }
 
-  if (descricao.length < 10) {
-    throw new Error(
-      "Descreva o problema ou a dúvida com um pouco mais de detalhes."
+
+  if (
+    assunto.length >
+    160
+  ) {
+    redirecionarErro(
+      "/protected/ajuda",
+      "O assunto informado é muito longo."
     );
   }
+
+
+  if (
+    descricao.length <
+    15
+  ) {
+    redirecionarErro(
+      "/protected/ajuda",
+      "Descreva sua solicitação com um pouco mais de detalhes."
+    );
+  }
+
+
+  if (
+    descricao.length >
+    5000
+  ) {
+    redirecionarErro(
+      "/protected/ajuda",
+      "A descrição ultrapassa o limite permitido."
+    );
+  }
+
+
+  const whatsappNumeros =
+    somenteNumeros(
+      whatsapp
+    );
+
+
+  if (
+    whatsapp &&
+    (
+      whatsappNumeros
+        .length <
+        10 ||
+      whatsappNumeros
+        .length >
+        13
+    )
+  ) {
+    redirecionarErro(
+      "/protected/ajuda",
+      "Informe um WhatsApp válido ou deixe o campo em branco."
+    );
+  }
+
+
+  if (
+    !email
+  ) {
+    redirecionarErro(
+      "/protected/ajuda",
+      "Não foi possível identificar o e-mail do seu usuário. Verifique seu cadastro antes de abrir o chamado."
+    );
+  }
+
 
   const {
-    data: chamado,
-    error,
-  } = await admin
-    .from("chamados_suporte")
-    .insert({
-      empresa_id: empresaId,
-      usuario_id: user.id,
-      categoria,
-      assunto,
-      descricao,
-      status: "aguardando_suporte",
-      pagina_origem:
-        paginaOrigem || null,
-      email_contato: email,
-      whatsapp_contato:
-        whatsapp || null,
-    })
-    .select("id")
-    .single();
+    data:
+      chamado,
 
-  if (error || !chamado) {
-    throw new Error(
-      `Não foi possível abrir o chamado: ${
-        error?.message ??
-        "erro desconhecido"
-      }`
-    );
-  }
+    error:
+      erroChamado,
+  } =
+    await admin
+      .from(
+        "chamados_suporte"
+      )
+      .insert({
+        empresa_id:
+          empresaId,
 
-  revalidatePath(
-    "/protected/ajuda"
-  );
+        usuario_id:
+          usuarioId,
 
-  redirect(
-    `/protected/ajuda/${chamado.id}`
-  );
-}
+        categoria,
 
-export async function responderChamadoUsuario(
-  formData: FormData
-) {
-  const {
-    admin,
-    user,
-    empresaId,
-  } = await obterContextoUsuario();
+        assunto,
 
-  const chamadoId =
-    String(
-      formData.get("chamado_id") ?? ""
-    ).trim();
+        descricao,
 
-  const mensagem =
-    String(
-      formData.get("mensagem") ?? ""
-    ).trim();
+        status:
+          "aberto",
 
-  if (!chamadoId) {
-    throw new Error(
-      "Chamado não informado."
-    );
-  }
+        pagina_origem:
+          "/protected/ajuda",
 
-  if (mensagem.length < 2) {
-    throw new Error(
-      "Digite sua mensagem."
-    );
-  }
+        email_contato:
+          email,
 
-  const {
-    data: chamado,
-    error: erroChamado,
-  } = await admin
-    .from("chamados_suporte")
-    .select("id, status")
-    .eq("id", chamadoId)
-    .eq("empresa_id", empresaId)
-    .eq("usuario_id", user.id)
-    .maybeSingle();
+        whatsapp_contato:
+          whatsapp ||
+          null,
+      })
+      .select(
+        "id"
+      )
+      .single();
+
 
   if (
     erroChamado ||
     !chamado
   ) {
-    throw new Error(
-      "Chamado não localizado."
+    console.error(
+      "Erro ao abrir chamado:",
+      erroChamado
+    );
+
+    redirecionarErro(
+      "/protected/ajuda",
+      "Não foi possível abrir o chamado. Tente novamente."
     );
   }
+
+
+  revalidatePath(
+    "/protected/ajuda"
+  );
+
+  revalidatePath(
+    "/protected/suporte"
+  );
+
+
+  redirect(
+    `/protected/ajuda/${chamado.id}?novo=1`
+  );
+}
+
+
+/* =====================================================
+   RESPONDER / REABRIR CHAMADO
+===================================================== */
+
+export async function responderChamado(
+  formData:
+    FormData
+) {
+  const chamadoId =
+    lerCampo(
+      formData,
+      "chamado_id"
+    );
+
+
+  const mensagem =
+    lerCampo(
+      formData,
+      "mensagem"
+    );
+
 
   if (
-    chamado.status ===
-    "resolvido"
+    !uuidValido(
+      chamadoId
+    )
+  ) {
+    redirect(
+      "/protected/ajuda"
+    );
+  }
+
+
+  if (
+    mensagem.length <
+    2
+  ) {
+    redirecionarErro(
+      `/protected/ajuda/${chamadoId}`,
+      "Digite uma mensagem antes de enviar."
+    );
+  }
+
+
+  if (
+    mensagem.length >
+    5000
+  ) {
+    redirecionarErro(
+      `/protected/ajuda/${chamadoId}`,
+      "A mensagem ultrapassa o limite permitido."
+    );
+  }
+
+
+  const {
+    admin,
+    usuarioId,
+    empresaId,
+  } =
+    await obterContextoUsuario();
+
+
+  const {
+    data:
+      chamado,
+
+    error:
+      erroChamado,
+  } =
+    await admin
+      .from(
+        "chamados_suporte"
+      )
+      .select(`
+        id,
+        status
+      `)
+      .eq(
+        "id",
+        chamadoId
+      )
+      .eq(
+        "empresa_id",
+        empresaId
+      )
+      .eq(
+        "usuario_id",
+        usuarioId
+      )
+      .maybeSingle();
+
+
+  if (
+    erroChamado
   ) {
     throw new Error(
-      "Este chamado já foi encerrado."
+      `Erro ao localizar chamado: ${erroChamado.message}`
     );
   }
 
-  const agora =
-    new Date().toISOString();
+
+  if (
+    !chamado
+  ) {
+    redirect(
+      "/protected/ajuda"
+    );
+  }
+
 
   const {
-    error: erroMensagem,
-  } = await admin
-    .from(
-      "chamados_suporte_mensagens"
-    )
-    .insert({
-      chamado_id: chamadoId,
-      autor_usuario_id: user.id,
-      autor_tipo: "usuario",
-      mensagem,
-      criada_em: agora,
-    });
+    error:
+      erroMensagem,
+  } =
+    await admin
+      .from(
+        "chamados_suporte_mensagens"
+      )
+      .insert({
+        chamado_id:
+          chamadoId,
 
-  if (erroMensagem) {
-    throw new Error(
-      `Não foi possível enviar a mensagem: ${erroMensagem.message}`
+        autor_usuario_id:
+          usuarioId,
+
+        autor_tipo:
+          "usuario",
+
+        mensagem,
+      });
+
+
+  if (
+    erroMensagem
+  ) {
+    console.error(
+      "Erro ao responder chamado:",
+      erroMensagem
+    );
+
+    redirecionarErro(
+      `/protected/ajuda/${chamadoId}`,
+      "Não foi possível enviar sua mensagem."
     );
   }
+
 
   const {
-    error: erroAtualizacao,
-  } = await admin
-    .from("chamados_suporte")
-    .update({
-      status:
-        "aguardando_suporte",
-      atualizado_em: agora,
-    })
-    .eq("id", chamadoId);
+    error:
+      erroAtualizacao,
+  } =
+    await admin
+      .from(
+        "chamados_suporte"
+      )
+      .update({
+        status:
+          "aguardando_suporte",
 
-  if (erroAtualizacao) {
-    throw new Error(
-      `Não foi possível atualizar o chamado: ${erroAtualizacao.message}`
+        atualizado_em:
+          new Date()
+            .toISOString(),
+      })
+      .eq(
+        "id",
+        chamadoId
+      )
+      .eq(
+        "empresa_id",
+        empresaId
+      )
+      .eq(
+        "usuario_id",
+        usuarioId
+      );
+
+
+  if (
+    erroAtualizacao
+  ) {
+    console.error(
+      "Erro ao atualizar chamado:",
+      erroAtualizacao
+    );
+
+    redirecionarErro(
+      `/protected/ajuda/${chamadoId}`,
+      "A mensagem foi registrada, mas não foi possível atualizar o status do chamado."
     );
   }
+
 
   revalidatePath(
     `/protected/ajuda/${chamadoId}`
@@ -266,5 +646,10 @@ export async function responderChamadoUsuario(
 
   revalidatePath(
     "/protected/suporte"
+  );
+
+
+  redirect(
+    `/protected/ajuda/${chamadoId}?enviado=1`
   );
 }

@@ -1,9 +1,13 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+
+import {
+  redirect,
+} from "next/navigation";
 
 import {
   CircleHelp,
-  MessageSquare,
+  Clock3,
+  MessageSquareText,
   Plus,
 } from "lucide-react";
 
@@ -19,97 +23,197 @@ import {
   createClient,
 } from "@/lib/supabase/server";
 
-function nomeStatus(
-  status: string
-) {
-  const nomes: Record<
-    string,
-    string
-  > = {
-    aberto: "Aberto",
-    aguardando_suporte:
-      "Aguardando suporte",
-    aguardando_usuario:
-      "Aguardando sua resposta",
-    resolvido: "Resolvido",
-  };
 
-  return (
-    nomes[status] ??
-    status
-  );
-}
+type AjudaPageProps = {
+  searchParams?:
+    Promise<{
+      erro?:
+        string |
+        string[];
+    }>;
+};
 
-function nomeCategoria(
-  categoria: string
-) {
-  const nomes: Record<
-    string,
-    string
-  > = {
+
+const nomesCategoria:
+  Record<string, string> = {
     problema_tecnico:
       "Problema técnico",
+
     duvida_utilizacao:
       "Dúvida de utilização",
-    sugestao: "Sugestão",
-    outro: "Outro",
+
+    sugestao:
+      "Sugestão",
+
+    outro:
+      "Outro",
   };
 
-  return (
-    nomes[categoria] ??
-    categoria
-  );
-}
+
+const nomesStatus:
+  Record<string, string> = {
+    aberto:
+      "Aberto",
+
+    aguardando_suporte:
+      "Aguardando suporte",
+
+    aguardando_usuario:
+      "Aguardando você",
+
+    resolvido:
+      "Resolvido",
+  };
+
 
 function formatarDataHora(
-  data: string
+  valor:
+    string |
+    null |
+    undefined
 ) {
+  if (
+    !valor
+  ) {
+    return "—";
+  }
+
+
   return new Intl.DateTimeFormat(
     "pt-BR",
     {
-      dateStyle: "short",
-      timeStyle: "short",
       timeZone:
         "America/Recife",
+
+      day:
+        "2-digit",
+
+      month:
+        "2-digit",
+
+      year:
+        "numeric",
+
+      hour:
+        "2-digit",
+
+      minute:
+        "2-digit",
     }
   ).format(
-    new Date(data)
+    new Date(
+      valor
+    )
   );
 }
 
-export default async function AjudaPage() {
+
+function classeStatus(
+  status:
+    string
+) {
+  if (
+    status ===
+    "resolvido"
+  ) {
+    return "border-emerald-200 bg-emerald-50 text-emerald-800";
+  }
+
+
+  if (
+    status ===
+    "aguardando_usuario"
+  ) {
+    return "border-amber-200 bg-amber-50 text-amber-800";
+  }
+
+
+  if (
+    status ===
+      "aberto" ||
+    status ===
+      "aguardando_suporte"
+  ) {
+    return "border-blue-200 bg-blue-50 text-blue-800";
+  }
+
+
+  return "border-slate-200 bg-slate-50 text-slate-700";
+}
+
+
+export default async function AjudaPage({
+  searchParams,
+}: AjudaPageProps) {
+  const parametros =
+    searchParams
+      ? await searchParams
+      : {};
+
+
+  const erroParametro =
+    Array.isArray(
+      parametros.erro
+    )
+      ? parametros.erro[0]
+      : parametros.erro;
+
+
   const supabase =
     await createClient();
 
+
   const {
-    data: {
-      user,
-    },
-    error: authError,
+    data:
+      authData,
+
+    error:
+      authError,
   } =
-    await supabase.auth.getUser();
+    await supabase
+      .auth
+      .getClaims();
+
 
   if (
     authError ||
-    !user
+    !authData
+      ?.claims
+      ?.sub
   ) {
     redirect(
       "/auth/login"
     );
   }
 
+
+  const usuarioId =
+    authData
+      .claims
+      .sub;
+
+
+  const admin =
+    createAdminClient();
+
+
   const {
-    data: membro,
-    error: erroMembro,
+    data:
+      membro,
+
+    error:
+      erroMembro,
   } =
-    await supabase
+    await admin
       .from(
         "membros_empresa"
       )
-      .select("empresa_id")
+      .select(
+        "empresa_id"
+      )
       .eq(
         "usuario_id",
-        user.id
+        usuarioId
       )
       .eq(
         "ativo",
@@ -117,108 +221,206 @@ export default async function AjudaPage() {
       )
       .maybeSingle();
 
+
   if (
-    erroMembro ||
+    erroMembro
+  ) {
+    throw new Error(
+      `Erro ao identificar sua empresa: ${erroMembro.message}`
+    );
+  }
+
+
+  if (
     !membro
   ) {
     redirect(
-      "/protected/acesso-negado"
+      "/auth/onboarding"
     );
   }
 
-  const admin =
-    createAdminClient();
 
-  const {
-    data: chamados,
-    error: erroChamados,
-  } =
-    await admin
-      .from(
-        "chamados_suporte"
-      )
-      .select(`
-        id,
-        numero,
-        categoria,
-        assunto,
-        status,
-        criado_em,
-        atualizado_em
-      `)
-      .eq(
-        "empresa_id",
-        membro.empresa_id
-      )
-      .eq(
-        "usuario_id",
-        user.id
-      )
-      .order(
-        "atualizado_em",
-        {
-          ascending: false,
-        }
-      );
+  const [
+    empresaResposta,
+    perfilResposta,
+    chamadosResposta,
+  ] =
+    await Promise.all([
+      admin
+        .from(
+          "empresas"
+        )
+        .select(
+          "nome"
+        )
+        .eq(
+          "id",
+          membro
+            .empresa_id
+        )
+        .maybeSingle(),
 
-  if (erroChamados) {
+      admin
+        .from(
+          "perfis_usuarios"
+        )
+        .select(`
+          nome,
+          email
+        `)
+        .eq(
+          "id",
+          usuarioId
+        )
+        .maybeSingle(),
+
+      admin
+        .from(
+          "chamados_suporte"
+        )
+        .select(`
+          id,
+          numero,
+          categoria,
+          assunto,
+          status,
+          criada_em,
+          atualizado_em
+        `)
+        .eq(
+          "empresa_id",
+          membro
+            .empresa_id
+        )
+        .eq(
+          "usuario_id",
+          usuarioId
+        )
+        .order(
+          "atualizado_em",
+          {
+            ascending:
+              false,
+          }
+        ),
+    ]);
+
+
+  if (
+    empresaResposta
+      .error
+  ) {
     throw new Error(
-      `Não foi possível carregar seus chamados: ${erroChamados.message}`
+      `Erro ao carregar empresa: ${empresaResposta.error.message}`
     );
   }
+
+
+  if (
+    perfilResposta
+      .error
+  ) {
+    throw new Error(
+      `Erro ao carregar perfil: ${perfilResposta.error.message}`
+    );
+  }
+
+
+  if (
+    chamadosResposta
+      .error
+  ) {
+    throw new Error(
+      `Erro ao carregar chamados: ${chamadosResposta.error.message}`
+    );
+  }
+
+
+  const chamados =
+    chamadosResposta
+      .data ??
+    [];
+
 
   return (
-    <div className="space-y-8">
+    <main className="w-full">
 
-      <div className="flex items-start gap-3">
-        <CircleHelp className="mt-1 h-6 w-6 text-[#0b1f3a]" />
+      {/* CABEÇALHO */}
 
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">
-            Suporte
-          </h1>
+      <section className="mb-10">
 
-          <p className="mt-2 text-sm text-muted-foreground">
-            Envie dúvidas,
-            problemas encontrados
-            ou sugestões sobre o
-            NOTE LITIS.
-          </p>
-        </div>
-      </div>
+        <div className="flex items-start gap-4">
 
-      {/* NOVO CHAMADO */}
-
-      <section className="rounded-2xl border bg-white p-6 shadow-sm">
-        <div className="flex items-center gap-3">
-          <Plus className="h-5 w-5 text-[#0b1f3a]" />
+          <div className="rounded-xl bg-muted p-3">
+            <CircleHelp className="h-6 w-6" />
+          </div>
 
           <div>
-            <h2 className="text-lg font-semibold">
-              Abrir chamado
-            </h2>
 
-            <p className="text-sm text-muted-foreground">
-              Descreva o que aconteceu
-              com o máximo de detalhes
-              possível.
+            <p className="text-sm font-medium text-muted-foreground">
+              NOTE LITIS
             </p>
+
+            <h1 className="mt-1 text-4xl font-bold tracking-tight">
+              Suporte
+            </h1>
+
+            <p className="mt-2 max-w-2xl text-muted-foreground">
+              Envie dúvidas, comunique problemas de utilização ou compartilhe sugestões sobre o sistema.
+            </p>
+
           </div>
+
         </div>
 
-        <form
-          action={abrirChamado}
-          className="mt-6 space-y-5"
-        >
-          <input
-            type="hidden"
-            name="pagina_origem"
-            value="/protected/ajuda"
-          />
+      </section>
 
-          <div className="grid gap-5 md:grid-cols-2">
+
+      {erroParametro && (
+        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-800">
+          {erroParametro}
+        </div>
+      )}
+
+
+      <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.7fr)]">
+
+        {/* NOVO CHAMADO */}
+
+        <section className="rounded-xl border bg-card">
+
+          <div className="border-b px-6 py-5">
+
+            <div className="flex items-center gap-3">
+
+              <Plus className="h-5 w-5" />
+
+              <div>
+
+                <h2 className="text-lg font-semibold">
+                  Abrir novo chamado
+                </h2>
+
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Quanto mais contexto você fornecer, mais fácil será compreender sua solicitação.
+                </p>
+
+              </div>
+
+            </div>
+
+          </div>
+
+
+          <form
+            action={
+              abrirChamado
+            }
+            className="space-y-6 p-6"
+          >
 
             <div>
+
               <label
                 htmlFor="categoria"
                 className="text-sm font-medium"
@@ -231,7 +433,7 @@ export default async function AjudaPage() {
                 name="categoria"
                 required
                 defaultValue=""
-                className="mt-2 w-full rounded-lg border bg-white px-3 py-2 text-sm"
+                className="mt-2 w-full rounded-lg border bg-background px-3 py-2.5 text-sm"
               >
                 <option
                   value=""
@@ -256,161 +458,261 @@ export default async function AjudaPage() {
                   Outro
                 </option>
               </select>
+
             </div>
 
+
             <div>
+
+              <label
+                htmlFor="assunto"
+                className="text-sm font-medium"
+              >
+                Assunto
+              </label>
+
+              <input
+                id="assunto"
+                name="assunto"
+                type="text"
+                required
+                minLength={
+                  5
+                }
+                maxLength={
+                  160
+                }
+                placeholder="Ex.: dúvida na importação de uma pauta"
+                className="mt-2 w-full rounded-lg border bg-background px-3 py-2.5 text-sm"
+              />
+
+            </div>
+
+
+            <div>
+
+              <label
+                htmlFor="descricao"
+                className="text-sm font-medium"
+              >
+                Descreva sua solicitação
+              </label>
+
+              <textarea
+                id="descricao"
+                name="descricao"
+                required
+                minLength={
+                  15
+                }
+                rows={
+                  8
+                }
+                maxLength={
+                  5000
+                }
+                placeholder="Informe o que aconteceu, o que você estava tentando fazer e qualquer detalhe que possa nos ajudar a compreender a situação."
+                className="mt-2 w-full resize-y rounded-lg border bg-background px-3 py-2.5 text-sm"
+              />
+
+              <p className="mt-2 text-xs text-muted-foreground">
+                Para sua segurança, não envie senhas ou dados de acesso.
+              </p>
+
+            </div>
+
+
+            <div>
+
               <label
                 htmlFor="whatsapp"
                 className="text-sm font-medium"
               >
-                WhatsApp para contato
+                WhatsApp
+                <span className="ml-1 font-normal text-muted-foreground">
+                  (opcional)
+                </span>
               </label>
 
               <input
                 id="whatsapp"
                 name="whatsapp"
-                type="text"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                maxLength={
+                  20
+                }
                 placeholder="(81) 99999-9999"
-                className="mt-2 w-full rounded-lg border px-3 py-2 text-sm"
+                className="mt-2 w-full rounded-lg border bg-background px-3 py-2.5 text-sm"
               />
+
+              <p className="mt-2 text-xs text-muted-foreground">
+                Poderemos utilizá-lo se a situação exigir uma comunicação mais direta.
+              </p>
+
             </div>
 
-          </div>
 
-          <div>
-            <label
-              htmlFor="assunto"
-              className="text-sm font-medium"
-            >
-              Assunto
-            </label>
+            <div className="rounded-lg border bg-muted/30 p-4">
 
-            <input
-              id="assunto"
-              name="assunto"
-              required
-              maxLength={160}
-              className="mt-2 w-full rounded-lg border px-3 py-2 text-sm"
-              placeholder="Ex.: Não consigo concluir uma diligência"
-            />
-          </div>
+              <p className="text-sm font-medium">
+                Identificação automática
+              </p>
 
-          <div>
-            <label
-              htmlFor="descricao"
-              className="text-sm font-medium"
-            >
-              Descrição
-            </label>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {perfilResposta
+                  .data
+                  ?.nome ||
+                  "Usuário"}
+                {" · "}
+                {empresaResposta
+                  .data
+                  ?.nome ||
+                  "Empresa"}
+              </p>
 
-            <textarea
-              id="descricao"
-              name="descricao"
-              required
-              rows={7}
-              maxLength={5000}
-              className="mt-2 w-full rounded-lg border px-3 py-2 text-sm"
-              placeholder="Informe o que você estava tentando fazer, o que aconteceu e, se houver, qual mensagem apareceu na tela."
-            />
+              {perfilResposta
+                .data
+                ?.email && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {perfilResposta
+                      .data
+                      .email}
+                  </p>
+                )}
 
-            <p className="mt-2 text-xs leading-5 text-muted-foreground">
-              Não é necessário anexar
-              arquivos. Se precisarmos
-              de informações adicionais,
-              entraremos em contato.
-            </p>
-          </div>
+            </div>
 
-          <button
-            type="submit"
-            className="inline-flex rounded-lg bg-[#0b1f3a] px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
-          >
-            Enviar chamado
-          </button>
-        </form>
-      </section>
 
-      {/* HISTÓRICO */}
+            <div className="flex justify-end">
 
-      <section className="rounded-2xl border bg-white p-6 shadow-sm">
-        <div className="flex items-center gap-3">
-          <MessageSquare className="h-5 w-5 text-[#0b1f3a]" />
+              <button
+                type="submit"
+                className="inline-flex items-center justify-center rounded-lg bg-[#0b1f3a] px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+              >
+                Abrir chamado
+              </button>
 
-          <div>
-            <h2 className="text-lg font-semibold">
+            </div>
+
+          </form>
+
+        </section>
+
+
+        {/* MEUS CHAMADOS */}
+
+        <section>
+
+          <div className="mb-4">
+
+            <h2 className="text-xl font-semibold">
               Meus chamados
             </h2>
 
-            <p className="text-sm text-muted-foreground">
-              Acompanhe as respostas
-              e o andamento dos seus
-              atendimentos.
+            <p className="mt-1 text-sm text-muted-foreground">
+              Acompanhe suas solicitações e respostas do suporte.
             </p>
+
           </div>
-        </div>
 
-        {chamados?.length ? (
-          <div className="mt-6 divide-y rounded-xl border">
-            {chamados.map(
-              (chamado) => (
-                <Link
-                  key={
-                    chamado.id
-                  }
-                  href={`/protected/ajuda/${chamado.id}`}
-                  className="block p-5 transition-colors hover:bg-slate-50"
-                >
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <p className="font-semibold">
-                        #NL-
-                        {String(
-                          chamado.numero
-                        ).padStart(
-                          6,
-                          "0"
-                        )}{" "}
-                        —{" "}
-                        {
-                          chamado.assunto
-                        }
-                      </p>
 
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {nomeCategoria(
-                          chamado.categoria
-                        )}
-                        {" • "}
-                        {formatarDataHora(
-                          chamado.criado_em
-                        )}
-                      </p>
+          {chamados.length ===
+          0 ? (
+            <div className="rounded-xl border bg-card px-6 py-10 text-center">
+
+              <MessageSquareText className="mx-auto h-7 w-7 text-muted-foreground" />
+
+              <p className="mt-4 font-medium">
+                Nenhum chamado
+              </p>
+
+              <p className="mt-2 text-sm text-muted-foreground">
+                Seus chamados aparecerão aqui.
+              </p>
+
+            </div>
+          ) : (
+            <div className="space-y-3">
+
+              {chamados.map(
+                (
+                  chamado
+                ) => (
+                  <Link
+                    key={
+                      chamado.id
+                    }
+                    href={`/protected/ajuda/${chamado.id}`}
+                    className="block rounded-xl border bg-card p-5 transition-colors hover:bg-muted/30"
+                  >
+
+                    <div className="flex items-start justify-between gap-4">
+
+                      <div className="min-w-0">
+
+                        <p className="text-xs font-medium text-muted-foreground">
+                          #NL-{String(
+                            chamado.numero
+                          ).padStart(
+                            6,
+                            "0"
+                          )}
+                        </p>
+
+                        <h3 className="mt-1 font-semibold">
+                          {chamado.assunto}
+                        </h3>
+
+                      </div>
+
+
+                      <span
+                        className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium ${classeStatus(
+                          chamado.status
+                        )}`}
+                      >
+                        {nomesStatus[
+                          chamado.status
+                        ] ??
+                          chamado.status}
+                      </span>
+
                     </div>
 
-                    <span className="w-fit rounded-full border px-3 py-1 text-xs font-medium">
-                      {nomeStatus(
-                        chamado.status
+
+                    <p className="mt-3 text-sm text-muted-foreground">
+                      {nomesCategoria[
+                        chamado.categoria
+                      ] ??
+                        chamado.categoria}
+                    </p>
+
+
+                    <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
+
+                      <Clock3 className="h-3.5 w-3.5" />
+
+                      Atualizado em{" "}
+                      {formatarDataHora(
+                        chamado
+                          .atualizado_em
                       )}
-                    </span>
-                  </div>
-                </Link>
-              )
-            )}
-          </div>
-        ) : (
-          <div className="mt-6 rounded-xl border border-dashed p-8 text-center">
-            <p className="font-medium">
-              Nenhum chamado aberto
-            </p>
 
-            <p className="mt-1 text-sm text-muted-foreground">
-              Seus atendimentos
-              aparecerão aqui.
-            </p>
-          </div>
-        )}
-      </section>
+                    </div>
 
-    </div>
+                  </Link>
+                )
+              )}
+
+            </div>
+          )}
+
+        </section>
+
+      </div>
+
+    </main>
   );
 }
