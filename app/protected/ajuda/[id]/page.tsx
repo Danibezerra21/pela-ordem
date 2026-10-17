@@ -316,7 +316,7 @@ export default async function ChamadoPage({
         assunto,
         descricao,
         status,
-        criada_em,
+        criado_em,
         atualizado_em
       `)
       .eq(
@@ -504,8 +504,6 @@ export default async function ChamadoPage({
 
         <div className="space-y-5 p-6">
 
-          {/* MENSAGEM INICIAL */}
-
           <div className="rounded-xl border bg-muted/20 p-5">
 
             <div className="flex items-center justify-between gap-4">
@@ -520,7 +518,7 @@ export default async function ChamadoPage({
 
                 {formatarDataHora(
                   chamado
-                    .criada_em
+                    .criado_em
                 )}
 
               </p>

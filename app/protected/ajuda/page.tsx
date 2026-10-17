@@ -284,7 +284,6 @@ export default async function AjudaPage({
           categoria,
           assunto,
           status,
-          criada_em,
           atualizado_em
         `)
         .eq(
@@ -529,6 +528,7 @@ export default async function AjudaPage({
                 className="text-sm font-medium"
               >
                 WhatsApp
+
                 <span className="ml-1 font-normal text-muted-foreground">
                   (opcional)
                 </span>
