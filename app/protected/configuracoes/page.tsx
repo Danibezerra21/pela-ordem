@@ -570,6 +570,11 @@ export default async function ConfiguracoesPage() {
                     serão analisados no próximo dia útil.
                   </p>
 
+                  <p className="mt-3 text-sm leading-6 text-red-900/80">
+                    Se desejar realizar uma nova tentativa de pagamento, utilize os dados
+                    de Pix abaixo e informe o novo pagamento normalmente.
+                  </p>
+
                   <p className="mt-3 text-xs text-red-800/70">
                     Pagador informado:{" "}
                     {pagamentoNaoLocalizado.nome_pagador}
@@ -579,8 +584,7 @@ export default async function ConfiguracoesPage() {
             </div>
           )}
 
-          {!pagamentoPendente &&
-            !pagamentoNaoLocalizado && (
+          {!pagamentoPendente && (
             <div className="mt-6 rounded-xl border border-dashed p-6">
               <p className="font-semibold">
                 Pagamento via Pix
