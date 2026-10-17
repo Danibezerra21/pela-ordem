@@ -20,6 +20,10 @@ type TipoCorrespondente =
   | "advogado"
   | "preposto";
 
+type TipoParticipante =
+  | TipoCorrespondente
+  | "testemunha";
+
 type CorrespondenteExistente = {
   id: string;
   ativo: boolean;
@@ -85,6 +89,20 @@ function normalizarTipo(
   if (
     valor === "advogado" ||
     valor === "preposto"
+  ) {
+    return valor;
+  }
+
+  return null;
+}
+
+function normalizarTipoParticipante(
+  valor: string
+): TipoParticipante | null {
+  if (
+    valor === "advogado" ||
+    valor === "preposto" ||
+    valor === "testemunha"
   ) {
     return valor;
   }
@@ -833,10 +851,42 @@ export async function atualizarCorrespondente(
 }
 
 /* =====================================================
-   ATIVAR / INATIVAR
+   ATIVAR / INATIVAR PARTICIPANTE
+
+   Abrange:
+   - advogado
+   - preposto
+   - testemunha
+
+   A observação é opcional e só é atualizada
+   em uma nova inativação.
+
+   Na reativação, os dados da última
+   inativação são preservados como histórico.
 ===================================================== */
 
-export async function alternarStatusCorrespondente(
+function nomeTipoParticipante(
+  tipo:
+    TipoParticipante
+) {
+  if (
+    tipo ===
+    "advogado"
+  ) {
+    return "Advogado";
+  }
+
+  if (
+    tipo ===
+    "preposto"
+  ) {
+    return "Preposto";
+  }
+
+  return "Testemunha";
+}
+
+export async function alternarStatusParticipante(
   formData: FormData
 ) {
   const {
@@ -852,23 +902,60 @@ export async function alternarStatusCorrespondente(
       "id"
     ).trim();
 
+  const tipo =
+    normalizarTipoParticipante(
+      lerCampo(
+        formData,
+        "tipo_participante"
+      )
+    );
+
+  const observacao =
+    lerCampo(
+      formData,
+      "observacao_inativacao"
+    ).trim();
+
   if (!id) {
     redirecionarComErro(
       "/protected/correspondentes",
-      "Correspondente não identificado."
+      "Participante não identificado."
     );
   }
 
-  const {
-    data:
-      correspondente,
+  if (!tipo) {
+    redirecionarComErro(
+      "/protected/correspondentes",
+      "Tipo de participante inválido."
+    );
+  }
 
-    error:
-      erroConsulta,
-  } =
-    await supabase
+  if (
+    observacao.length >
+    2000
+  ) {
+    redirecionarComErro(
+      "/protected/correspondentes",
+      "A observação da inativação deve ter no máximo 2.000 caracteres."
+    );
+  }
+
+  const tabela =
+    tipo ===
+    "testemunha"
+      ? "testemunhas"
+      : "correspondentes";
+
+  const campoExclusao =
+    tipo ===
+    "testemunha"
+      ? "excluida_em"
+      : "excluido_em";
+
+  let consulta =
+    supabase
       .from(
-        "correspondentes"
+        tabela
       )
       .select(
         `
@@ -885,43 +972,91 @@ export async function alternarStatusCorrespondente(
         empresaId
       )
       .is(
-        "excluido_em",
+        campoExclusao,
         null
-      )
+      );
+
+  if (
+    tipo !==
+    "testemunha"
+  ) {
+    consulta =
+      consulta.eq(
+        "tipo",
+        tipo
+      );
+  }
+
+  const {
+    data:
+      participante,
+
+    error:
+      erroConsulta,
+  } =
+    await consulta
       .maybeSingle();
 
   if (
     erroConsulta ||
-    !correspondente
+    !participante
   ) {
     redirecionarComErro(
       "/protected/correspondentes",
-      "O correspondente não foi encontrado."
+      "O participante não foi encontrado."
     );
   }
 
   const novoStatus =
-    !correspondente
+    !participante
       .ativo;
 
-  const {
-    error,
-  } =
-    await supabase
+  const agora =
+    new Date()
+      .toISOString();
+
+  const atualizacao:
+    Record<
+      string,
+      string |
+      boolean |
+      null
+    > = {
+      ativo:
+        novoStatus,
+
+      atualizado_por:
+        usuarioId,
+
+      atualizado_em:
+        agora,
+    };
+
+  if (
+    !novoStatus
+  ) {
+    atualizacao
+      .observacao_inativacao =
+      observacao ||
+      null;
+
+    atualizacao
+      .inativado_em =
+      agora;
+
+    atualizacao
+      .inativado_por =
+      usuarioId;
+  }
+
+  let atualizacaoQuery =
+    supabase
       .from(
-        "correspondentes"
+        tabela
       )
-      .update({
-        ativo:
-          novoStatus,
-
-        atualizado_por:
-          usuarioId,
-
-        atualizado_em:
-          new Date()
-            .toISOString(),
-      })
+      .update(
+        atualizacao
+      )
       .eq(
         "id",
         id
@@ -931,22 +1066,43 @@ export async function alternarStatusCorrespondente(
         empresaId
       )
       .is(
-        "excluido_em",
+        campoExclusao,
         null
       );
+
+  if (
+    tipo !==
+    "testemunha"
+  ) {
+    atualizacaoQuery =
+      atualizacaoQuery.eq(
+        "tipo",
+        tipo
+      );
+  }
+
+  const {
+    error,
+  } =
+    await atualizacaoQuery;
 
   if (error) {
     redirecionarComErro(
       "/protected/correspondentes",
-      `Erro ao alterar situação do correspondente: ${error.message}`
+      `Erro ao alterar situação do participante: ${error.message}`
     );
   }
 
   revalidarCorrespondentes();
 
+  const nomeTipo =
+    nomeTipoParticipante(
+      tipo
+    );
+
   redirecionarComSucesso(
     novoStatus
-      ? "Correspondente reativado com sucesso."
-      : "Correspondente inativado com sucesso."
+      ? `${nomeTipo} reativado com sucesso.`
+      : `${nomeTipo} inativado com sucesso.`
   );
 }
