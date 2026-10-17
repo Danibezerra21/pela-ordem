@@ -19,6 +19,11 @@ import {
   createClient,
 } from "@/lib/supabase/server";
 
+import {
+  POLITICA_PRIVACIDADE_VERSAO,
+  TERMOS_USO_VERSAO,
+} from "@/lib/legal";
+
 
 function hojeEmRecife() {
   return new Intl.DateTimeFormat(
@@ -90,6 +95,64 @@ export default async function ProtectedLayout({
 
   const admin =
     createAdminClient();
+
+
+  /*
+   * =====================================================
+   * ACEITE LEGAL
+   * =====================================================
+   *
+   * Todo usuário autenticado deve possuir registro
+   * de aceite das versões vigentes dos Termos de Uso
+   * e da Política de Privacidade antes de acessar
+   * qualquer rota protegida.
+   */
+
+  const {
+    data:
+      aceiteLegal,
+
+    error:
+      erroAceiteLegal,
+  } =
+    await admin
+      .from(
+        "aceites_legais"
+      )
+      .select(
+        "id"
+      )
+      .eq(
+        "usuario_id",
+        usuarioId
+      )
+      .eq(
+        "termos_versao",
+        TERMOS_USO_VERSAO
+      )
+      .eq(
+        "privacidade_versao",
+        POLITICA_PRIVACIDADE_VERSAO
+      )
+      .maybeSingle();
+
+
+  if (
+    erroAceiteLegal
+  ) {
+    throw new Error(
+      `Erro ao verificar aceite dos documentos legais: ${erroAceiteLegal.message}`
+    );
+  }
+
+
+  if (
+    !aceiteLegal
+  ) {
+    redirect(
+      "/auth/aceite-legal"
+    );
+  }
 
 
   /*
